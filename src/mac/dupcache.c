@@ -22,21 +22,28 @@ static size_t dup_slot(treenet_addr_t src, uint16_t seq)
     return (size_t)(h % TREENET_DUP_CACHE_SIZE);
 }
 
-bool tn_dupcache_seen(tn_dupcache_t *c, treenet_addr_t src, uint16_t seq,
+bool tn_dupcache_check(const tn_dupcache_t *c, treenet_addr_t src,
+                       uint16_t seq, uint32_t now)
+{
+    const tn_dup_entry_t *e = &c->entries[dup_slot(src, seq)];
+    return e->valid && e->src == src && e->seq == seq &&
+           !tn_time_after(now, e->seen_ms + c->ttl_ms);
+}
+
+void tn_dupcache_mark(tn_dupcache_t *c, treenet_addr_t src, uint16_t seq,
                       uint32_t now)
 {
-    size_t idx = dup_slot(src, seq);
-    tn_dup_entry_t *e = &c->entries[idx];
-
-    if (e->valid && e->src == src && e->seq == seq &&
-        !tn_time_after(now, e->seen_ms + c->ttl_ms)) {
-        return true; /* fresh duplicate */
-    }
-
-    /* Insert (or refresh) the entry. */
+    tn_dup_entry_t *e = &c->entries[dup_slot(src, seq)];
     e->valid = true;
     e->src = src;
     e->seq = seq;
     e->seen_ms = now;
-    return false;
+}
+
+bool tn_dupcache_seen(tn_dupcache_t *c, treenet_addr_t src, uint16_t seq,
+                      uint32_t now)
+{
+    bool dup = tn_dupcache_check(c, src, seq, now);
+    tn_dupcache_mark(c, src, seq, now);
+    return dup;
 }

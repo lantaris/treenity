@@ -39,7 +39,25 @@ typedef struct {
 void tn_dupcache_init(tn_dupcache_t *c, uint32_t ttl_ms);
 
 /**
+ * @brief Check whether a frame was seen before, without recording it.
+ *
+ * Lets a caller commit the entry only once the frame has actually been queued
+ * for forwarding (see tn_dupcache_mark), so a frame dropped because the
+ * transmit queue was full can still be retried instead of being suppressed.
+ *
+ * @return true if the frame is a duplicate (already seen and still fresh)
+ */
+bool tn_dupcache_check(const tn_dupcache_t *c, treenet_addr_t src,
+                       uint16_t seq, uint32_t now);
+
+/** @brief Record (or refresh) a frame in the cache. */
+void tn_dupcache_mark(tn_dupcache_t *c, treenet_addr_t src, uint16_t seq,
+                      uint32_t now);
+
+/**
  * @brief Check whether a frame was seen before and record it.
+ *
+ * Convenience wrapper around tn_dupcache_check() and tn_dupcache_mark().
  *
  * @return true if the frame is a duplicate (already seen and still fresh)
  */

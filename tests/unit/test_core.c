@@ -116,6 +116,23 @@ static void test_dupcache(void)
     CHECK(!tn_dupcache_seen(&c, 42, 7, 2000));
 }
 
+static void test_dupcache_check_mark(void)
+{
+    tn_dupcache_t c;
+    tn_dupcache_init(&c, 1000);
+
+    /* check() must not record the frame, so a dropped forward can retry. */
+    CHECK(!tn_dupcache_check(&c, 5, 1, 0));
+    CHECK(!tn_dupcache_check(&c, 5, 1, 0));
+
+    tn_dupcache_mark(&c, 5, 1, 0);
+    CHECK(tn_dupcache_check(&c, 5, 1, 10));
+    CHECK(tn_dupcache_seen(&c, 5, 1, 10)); /* still fresh */
+
+    /* After the TTL the entry is forgotten. */
+    CHECK(!tn_dupcache_check(&c, 5, 1, 2000));
+}
+
 static void test_frame_roundtrip(void)
 {
     uint8_t payload[3] = { 0xAA, 0xBB, 0xCC };
@@ -155,6 +172,21 @@ static void test_frame_reject_short(void)
     uint8_t buf[4] = { 0 };
     tn_frame_t d;
     CHECK(!tn_frame_decode(buf, sizeof(buf), &d));
+}
+
+static void test_frame_encode_null_payload(void)
+{
+    /* A declared payload without bytes must be rejected, not encoded. */
+    tn_frame_t f;
+    memset(&f, 0, sizeof(f));
+    f.version = TREENET_PROTOCOL_VERSION;
+    f.type = TREENET_FRAME_DATA;
+    f.src = 1;
+    f.dst = 2;
+    f.payload = NULL;
+    f.payload_len = 4;
+    uint8_t buf[TREENET_MTU];
+    CHECK_EQ(tn_frame_encode(buf, sizeof(buf), &f), 0u);
 }
 
 static void test_frame_crc_vector(void)
@@ -232,8 +264,10 @@ void run_core_tests(void)
     RUN_TEST(test_timer);
     RUN_TEST(test_timer_periodic);
     RUN_TEST(test_dupcache);
+    RUN_TEST(test_dupcache_check_mark);
     RUN_TEST(test_frame_roundtrip);
     RUN_TEST(test_frame_reject_short);
+    RUN_TEST(test_frame_encode_null_payload);
     RUN_TEST(test_frame_crc_vector);
     RUN_TEST(test_beacon_roundtrip);
     RUN_TEST(test_dao_roundtrip);

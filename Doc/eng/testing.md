@@ -50,9 +50,9 @@ no OS.
 - EWMA convergence;
 - ring buffer (push/pop/overflow);
 - timers (one-shot, periodic);
-- duplicate cache;
+- duplicate cache (seen, and check/mark without recording);
 - frame, beacon, DAO and fragment codecs (round-trip and rejection of short
-  input);
+  input or a null payload);
 - time-on-air monotonicity and robustness for out-of-range parameters;
 - context size floor (`treenet_context_size()`).
 
@@ -94,7 +94,11 @@ On the simulator:
   interval, a DAO with `hops > MAX_HOPS`, malformed fragments (`count=0`,
   `index>=count`, a short non-last fragment, a mismatched `count`);
 - a duplicate unicast is re-ACKed but delivered to the application once, and a
-  fragmented datagram is refused as a whole when the transmit queue is full.
+  fragmented datagram is refused as a whole when the transmit queue is full;
+- a relay with a full transmit queue neither ACKs nor poisons the duplicate
+  cache (the previous hop's retransmission is forwarded once the queue drains),
+  and a DAO that cannot be queued reports failure while still installing its
+  route.
 
 ### Bit-error scenario (`test_bit_errors_tolerated`)
 
@@ -154,7 +158,7 @@ treenity tests
 [mesh]
   test_seamless_reparenting ... ok
 
-1918 checks, 0 failures
+1931 checks, 0 failures
 ```
 
 A non-zero exit code means failure — convenient for CI.

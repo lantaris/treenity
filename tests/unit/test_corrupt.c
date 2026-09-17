@@ -438,6 +438,84 @@ static void test_fragmented_send_queue_full(void)
     sim_destroy(s);
 }
 
+static void test_forward_not_marked_when_queue_full(void)
+{
+    /* A relay whose transmit queue is full must not ACK nor poison the
+     * duplicate cache, so the previous hop's retransmission is forwarded once
+     * the queue drains. */
+    sim_t *s = make_net();
+    treenet_t *relay = sim_find(s, 2)->net;
+
+    /* Fill the queue without polling, so no slot is freed. */
+    for (unsigned i = 0; i < 64; i++) {
+        uint8_t one = 0x11;
+        (void)treenet_send(relay, 1, &one, 1);
+    }
+
+    uint8_t payload[3] = { 7, 7, 7 };
+    uint8_t buf[TREENET_MTU];
+    tn_frame_t f;
+    memset(&f, 0, sizeof(f));
+    f.version = TREENET_PROTOCOL_VERSION;
+    f.type = TREENET_FRAME_DATA;
+    f.flags = TN_FLAG_WANT_ACK;
+    f.src = 3; f.dst = 1; f.seq = 100; f.net_id = 1; f.hop_limit = 8; f.prev = 3;
+    f.payload = payload; f.payload_len = sizeof(payload);
+    size_t len = tn_frame_encode(buf, sizeof(buf), &f);
+    CHECK(len > 0);
+
+    uint32_t dropped_before = relay->stats.frames_dropped;
+    inject(s, 2, buf, len); /* queue full: dropped, not marked */
+    CHECK(relay->stats.frames_dropped > dropped_before);
+    CHECK(!tn_dupcache_check(&relay->dup, 3, 100, relay->now_ms));
+
+    /* Let the queued frames drain (their CSMA backoff must elapse), then retry:
+     * now the frame is forwarded and only then marked. */
+    sim_run(s, 1000);
+    inject(s, 2, buf, len);
+    CHECK(tn_dupcache_check(&relay->dup, 3, 100, relay->now_ms));
+
+    sim_destroy(s);
+}
+
+static void test_dao_not_forwarded_when_queue_full(void)
+{
+    /* A DAO that cannot be queued must report failure (no ACK) while still
+     * installing the route to its origin. */
+    sim_t *s = make_net();
+    treenet_t *relay = sim_find(s, 2)->net;
+
+    for (unsigned i = 0; i < 64; i++) {
+        uint8_t one = 0x11;
+        (void)treenet_send(relay, 1, &one, 1);
+    }
+
+    uint8_t payload[TN_DAO_PAYLOAD_LEN];
+    tn_dao_payload_t d;
+    d.origin = 3;
+    d.hops = 0;
+    tn_dao_encode(payload, &d);
+
+    tn_frame_t f;
+    memset(&f, 0, sizeof(f));
+    f.version = TREENET_PROTOCOL_VERSION;
+    f.type = TREENET_FRAME_DAO;
+    f.flags = TN_FLAG_WANT_ACK;
+    f.src = 3; f.dst = 2; f.seq = 200; f.net_id = 1; f.hop_limit = 8; f.prev = 3;
+    f.payload = payload; f.payload_len = TN_DAO_PAYLOAD_LEN;
+
+    CHECK_EQ(tn_dao_handle(relay, &f, relay->now_ms), -1);
+    CHECK(tn_route_lookup(&relay->routes, 3, relay->now_ms,
+                          TREENET_ROUTE_TIMEOUT_MS) != NULL);
+
+    /* Drain the queue (the CSMA backoff must elapse) and retry: now it is
+     * forwarded. */
+    sim_run(s, 1000);
+    CHECK_EQ(tn_dao_handle(relay, &f, relay->now_ms), 0);
+
+    sim_destroy(s);
+}
+
 void run_corrupt_tests(void)
 {
 #if TREENET_ENABLE_FRAME_CRC
@@ -454,4 +532,6 @@ void run_corrupt_tests(void)
     RUN_TEST(test_malformed_fragments);
     RUN_TEST(test_duplicate_unicast_suppressed);
     RUN_TEST(test_fragmented_send_queue_full);
+    RUN_TEST(test_forward_not_marked_when_queue_full);
+    RUN_TEST(test_dao_not_forwarded_when_queue_full);
 }

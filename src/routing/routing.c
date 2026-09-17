@@ -364,16 +364,16 @@ void tn_dao_send(treenet_t *t, uint32_t now)
     }
 }
 
-void tn_dao_handle(treenet_t *t, const tn_frame_t *f, uint32_t now)
+int tn_dao_handle(treenet_t *t, const tn_frame_t *f, uint32_t now)
 {
     /* Leaves are not routers: they never hold or forward downward routes. */
     if (t->role == TREENET_ROLE_LEAF) {
-        return;
+        return 0;
     }
 
     tn_dao_payload_t d;
     if (!tn_dao_decode(f->payload, f->payload_len, &d)) {
-        return;
+        return -1;
     }
     /* Reject nonsensical routes: a corrupted DAO must not install a bogus
      * entry or make us forward garbage towards the Master. */
@@ -382,10 +382,10 @@ void tn_dao_handle(treenet_t *t, const tn_frame_t *f, uint32_t now)
         d.hops > TREENET_MAX_HOPS ||
         f->prev == TREENET_ADDR_INVALID ||
         f->prev == TREENET_ADDR_BROADCAST) {
-        return;
+        return -1;
     }
     if (d.origin == t->addr) {
-        return; /* our own DAO came back; ignore */
+        return 0; /* our own DAO came back; ignore (but ACK the link) */
     }
 
     /* Install/refresh a downward route to the origin through the node the
@@ -397,14 +397,14 @@ void tn_dao_handle(treenet_t *t, const tn_frame_t *f, uint32_t now)
 
     /* The Master is the root: it stops here and uses the route table. */
     if (t->role == TREENET_ROLE_MASTER) {
-        return;
+        return 0;
     }
     if (t->parent == TREENET_ADDR_INVALID) {
-        return;
+        return -1; /* nowhere to forward: let the child retransmit */
     }
     /* Never send a DAO back the way it came. */
     if (f->prev == t->parent) {
-        return;
+        return 0;
     }
 
     uint8_t payload[TN_DAO_PAYLOAD_LEN];
@@ -426,6 +426,9 @@ void tn_dao_handle(treenet_t *t, const tn_frame_t *f, uint32_t now)
     out.payload = payload;
     out.payload_len = TN_DAO_PAYLOAD_LEN;
 
-    (void)tn_tx_submit(t, &out, true, t->parent, 0);
+    if (tn_tx_submit(t, &out, true, t->parent, 0) != 0) {
+        return -1; /* queue full: no ACK, the child will retransmit */
+    }
+    return 0;
 }
 

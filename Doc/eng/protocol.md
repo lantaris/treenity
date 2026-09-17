@@ -124,10 +124,17 @@ TREENET_SLOT_MS`. In `tn_tx_poll`:
 
 `tn_dupcache_seen(src, seq, now)` stores recently seen `(src, seq)` pairs in a
 fixed-size hash table with a TTL of `TREENET_DUP_TTL_MS`. It suppresses
-duplicates during forwarding and flooding.
+duplicates during forwarding and flooding. `tn_dupcache_check()` tests without
+recording and `tn_dupcache_mark()` records; a relay commits the entry only after
+the frame has actually been queued, so a frame dropped by a full transmit queue
+is retried by the previous hop instead of being suppressed.
 
 > Important: when a duplicate of a reliable frame arrives, the ACK is still sent
 > again so the sender stops retransmitting.
+>
+> The cache is keyed by the 16-bit `seq`. Within one TTL a node that sends more
+> than 65536 frames (or reboots and reuses a sequence number) can be falsely
+> suppressed; keep `TREENET_DUP_TTL_MS` small relative to the traffic rate.
 
 ### 3.3 Hop-by-hop ACK
 

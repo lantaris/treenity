@@ -126,7 +126,7 @@ Details in [architecture.md](architecture.md) and [protocol.md](protocol.md).
 
 ## 6. Verification (current)
 
-- **1918 checks**, 0 failures (`make test`, `ctest`).
+- **1931 checks**, 0 failures (`make test`, `ctest`).
 - Scenarios: network formation, rank ordering, unicast down/up, broadcast,
   seamless reconfiguration on relay failure, beacon interval reset on
   re-parenting, tolerance to bit errors, neighbour metrics.

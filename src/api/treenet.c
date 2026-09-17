@@ -413,7 +413,7 @@ static void tn_handle_data(treenet_t *t, const tn_frame_t *f, int16_t rssi,
     }
 
     /* Forwarding: suppress duplicates but always re-ACK the link. */
-    if (tn_dupcache_seen(&t->dup, f->src, f->seq, now)) {
+    if (tn_dupcache_check(&t->dup, f->src, f->seq, now)) {
         if (want_ack) tn_send_ack(t, f->prev, f->seq);
         return;
     }
@@ -428,11 +428,16 @@ static void tn_handle_data(treenet_t *t, const tn_frame_t *f, int16_t rssi,
         return;
     }
 
-    if (want_ack) tn_send_ack(t, f->prev, f->seq);
-
     tn_frame_t out = *f;
     out.hop_limit = (uint8_t)(f->hop_limit - 1u);
-    (void)tn_tx_submit(t, &out, want_ack, nh, 0);
+    if (tn_tx_submit(t, &out, want_ack, nh, 0) != 0) {
+        /* Not queued (transmit queue full): leave the duplicate cache unset and
+         * send no ACK, so the previous hop retransmits and we try again. */
+        TN_STAT_INC(t, frames_dropped);
+        return;
+    }
+    tn_dupcache_mark(&t->dup, f->src, f->seq, now);
+    if (want_ack) tn_send_ack(t, f->prev, f->seq);
 }
 
 /**
@@ -509,10 +514,12 @@ void tn_process_frame(treenet_t *t, const tn_frame_t *f, int16_t rssi,
     }
     case TREENET_FRAME_DAO:
         if (f->dst == t->addr || f->dst == TREENET_ADDR_BROADCAST) {
-            if ((f->flags & TN_FLAG_WANT_ACK) != 0) {
+            /* Acknowledge only once the DAO has been consumed or queued; a
+             * dropped DAO is retransmitted by the previous hop. */
+            if (tn_dao_handle(t, f, now) == 0 &&
+                (f->flags & TN_FLAG_WANT_ACK) != 0) {
                 tn_send_ack(t, f->prev, f->seq);
             }
-            tn_dao_handle(t, f, now);
         }
         break;
     case TREENET_FRAME_ACK:

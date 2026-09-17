@@ -216,7 +216,7 @@ treenity/
 ## Testing
 
 ```sh
-make test          # unit + scenario tests (1918 checks)
+make test          # unit + scenario tests (1931 checks)
 make fuzz          # fuzzing, 200000 iterations
 ```
 

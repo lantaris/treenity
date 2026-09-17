@@ -103,6 +103,14 @@ Conventions:
 - **Parameters:** `t` — the instance; `data`/`len` — application data.
 - **Returns:** `0` — queued; negative — error (same codes, except "no route").
 
+### Hop-by-hop acknowledgement
+
+A relay sends the hop-by-hop ACK only **after** the frame has actually been
+queued for forwarding. A frame dropped because the transmit queue was full is
+therefore not acknowledged: the previous hop retransmits it and it is forwarded
+once the queue drains. `TX_DONE` still confirms only the first hop, not
+end-to-end delivery (see `TODO.md`).
+
 ---
 
 ## 4. Introspection

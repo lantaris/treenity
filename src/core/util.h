@@ -41,10 +41,14 @@ extern "C" {
 #define TN_CONSUME() __atomic_thread_fence(__ATOMIC_ACQUIRE)
 #elif defined(_MSC_VER)
 #include <intrin.h>
-#include <windows.h>
+#if defined(_M_ARM) || defined(_M_ARM64)
+#define TN_HW_FENCE() __dmb(_ARM_BARRIER_SYNC)
+#else
+#define TN_HW_FENCE() _mm_mfence()
+#endif
 #define TN_BARRIER() _ReadWriteBarrier()
-#define TN_PUBLISH() do { _ReadWriteBarrier(); MemoryBarrier(); } while (0)
-#define TN_CONSUME() do { MemoryBarrier(); _ReadWriteBarrier(); } while (0)
+#define TN_PUBLISH() do { _ReadWriteBarrier(); TN_HW_FENCE(); } while (0)
+#define TN_CONSUME() do { TN_HW_FENCE(); _ReadWriteBarrier(); } while (0)
 #else
 #define TN_BARRIER() ((void)0)
 #define TN_PUBLISH() ((void)0)

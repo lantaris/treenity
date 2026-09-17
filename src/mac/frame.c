@@ -32,6 +32,10 @@ uint16_t tn_frame_crc(const uint8_t *data, size_t len)
 
 size_t tn_frame_encode(uint8_t *buf, size_t cap, const tn_frame_t *frame)
 {
+    if (frame->payload_len > 0u && frame->payload == NULL) {
+        return 0; /* declared payload without bytes: reject */
+    }
+
     size_t body = TN_FRAME_HDR + frame->payload_len;
     size_t total = body + TN_FRAME_TRAILER;
     if (total > cap || total > TREENET_MTU) {

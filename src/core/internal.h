@@ -220,8 +220,15 @@ void tn_beacon_reset(treenet_t *t, uint32_t now);
 /** @brief Build and queue a DAO towards the Master. */
 void tn_dao_send(treenet_t *t, uint32_t now);
 
-/** @brief Handle an inbound DAO frame (route install + forwarding). */
-void tn_dao_handle(treenet_t *t, const tn_frame_t *f, uint32_t now);
+/**
+ * @brief Handle an inbound DAO frame (route install + forwarding).
+ *
+ * @return 0 when the DAO was consumed (terminal node, or successfully queued
+ *         for forwarding), negative when it was dropped and must be
+ *         retransmitted by the previous hop (bad payload, no parent, or a full
+ *         transmit queue). The caller acknowledges only on 0.
+ */
+int tn_dao_handle(treenet_t *t, const tn_frame_t *f, uint32_t now);
 
 /* ------------------------------------------------------------------------- */
 /* Forwarding (implemented in treenet.c)                                      */
