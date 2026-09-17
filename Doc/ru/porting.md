@@ -41,7 +41,6 @@ backoff и расписание beacon-ов.
 |---|---|---|
 | `channel_free()` | CAD: `true`, если эфир свободен | считается, что всегда свободен |
 | `set_radio(cfg)` | смена SF/BW/мощности | изменения игнорируются |
-| `critical_enter()/exit()` | защита кольцевого буфера приёма | без защиты |
 | `log(level,msg)` | вывод диагностики | лог отключён |
 | `timer_arm(delay_ms)` | взвести таймер пробуждения (tickless) | `treenet_poll()` вызываете сами |
 
@@ -56,9 +55,11 @@ void radio_rx_isr(const uint8_t *data, size_t len, int16_t rssi, int8_t snr)
 }
 ```
 
-`treenet_rx` не выполняет тяжёлой работы и безопасен в прерывании. Если
-прерывание может прервать `treenet_poll` в момент работы с буфером, задайте
-`critical_enter/exit` — они используются вокруг записи в буфер.
+`treenet_rx` не выполняет тяжёлой работы и безопасен в прерывании. Кольцевой
+буфер приёма — **lock-free** (один производитель — `treenet_rx`, один
+потребитель — `treenet_poll`), поэтому критические секции не требуются.
+Вызывать `treenet_rx` можно только из **одного** контекста (обработчик приёма
+модема).
 
 ## 4. Пример порта (SX126x + HAL)
 
@@ -85,14 +86,11 @@ static void my_set_radio(const treenet_radio_cfg_t *cfg)
     sx126x_set_tx_power(cfg->tx_power_dbm);
 }
 
-static void my_crit_enter(void) { hal_irq_disable(); }
-static void my_crit_exit(void)  { hal_irq_enable();  }
 static void my_log(int level, const char *msg) { uart_printf("[%d] %s\n", level, msg); }
 
 static const treenet_port_t port = {
     .tx = my_tx, .now_ms = my_now, .rnd = my_rnd,
     .channel_free = my_channel_free, .set_radio = my_set_radio,
-    .critical_enter = my_crit_enter, .critical_exit = my_crit_exit,
     .log = my_log,
 };
 

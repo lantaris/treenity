@@ -235,7 +235,7 @@ void (*on_event)(treenet_t *t, treenet_event_t ev, void *arg);
 ## 7. Порт (кратко)
 
 Обязательные функции порта: `tx`, `now_ms`, `rnd`. Опциональные: `channel_free`,
-`set_radio`, `critical_enter/exit`, `log`, `timer_arm`. Подробности — в
+`set_radio`, `log`, `timer_arm`. Подробности — в
 [porting.md](porting.md).
 
 ---

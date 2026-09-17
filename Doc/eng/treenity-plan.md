@@ -48,8 +48,8 @@ Contiki-NG NETSTACK, Semtech AN1200.13 (time-on-air).
 Layers (bottom-up): **PORT → Core → MAC → Link → Routing → API**.
 
 - **PORT** (`include/treenet/port.h`) — implemented by the user: `tx`, `now_ms`,
-  `rnd` are mandatory; `channel_free`, `set_radio`, `critical_enter/exit`, `log`
-  are optional. Receive — `treenet_rx(buf,len,rssi,snr)`.
+  `rnd` are mandatory; `channel_free`, `set_radio`, `log`, `timer_arm` are
+  optional. Receive — `treenet_rx(buf,len,rssi,snr)`.
 - **Core** (`src/core`): receive ring buffer, timers, EWMA, utilities, context.
 - **MAC** (`src/mac`): frame codec, CRC, dup-cache, CSMA/CA, fragmentation,
   time-on-air.
@@ -73,7 +73,7 @@ Details in [architecture.md](architecture.md) and [protocol.md](protocol.md).
 | Internal context | `src/core/internal.h` | ✅ |
 | Utilities | `src/core/util.h` | ✅ |
 | EWMA | `src/core/ewma.h` | ✅ |
-| Ring buffer | `src/core/ringbuf.[ch]` | ✅ |
+| Ring buffer (lock-free SPSC) | `src/core/ringbuf.[ch]` | ✅ |
 | Timers | `src/core/timer.[ch]` | ✅ |
 | Frame/codec | `src/mac/frame.[ch]` | ✅ |
 | Integrity check (CRC-16) | `src/mac/frame.[ch]` | ✅ |
@@ -135,6 +135,9 @@ Details in [architecture.md](architecture.md) and [protocol.md](protocol.md).
   state; a foreign `net_id` is ignored.
 - **Fuzzing** — mutation (from a valid-frame corpus) plus random input, 300 000
   iterations with no crashes or invariant violations.
+- **Concurrency stress tests** (`make stress`): the ring (1,000,000 records, one
+  producer / one consumer) and the library (`treenet_rx` in one thread,
+  `treenet_poll` in another) — no loss or corruption.
 - Builds without warnings with `-Wall -Wextra`.
 - Example: a Master + 5 nodes network over ~1 km, rank 0/8/16/24/32/40, unicast
   both ways and broadcast delivered.

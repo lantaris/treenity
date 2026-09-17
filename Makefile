@@ -19,9 +19,11 @@ LDLIBS  += -lm
 ifeq ($(OS),Windows_NT)
   MKDIR = mkdir
   RMDIR = rmdir /s /q
+  THREAD_LIBS =
 else
   MKDIR = mkdir -p
   RMDIR = rm -rf
+  THREAD_LIBS = -lpthread
 endif
 
 BUILD   := build
@@ -38,7 +40,7 @@ TEST_SRC := tests/unit/test_main.c tests/unit/test_core.c tests/unit/test_mesh.c
 
 LIB      := $(BUILD)/libtreenet.a
 
-.PHONY: all test example run fuzz repeaters clean
+.PHONY: all test example run fuzz repeaters stress clean
 
 all: $(LIB)
 
@@ -76,6 +78,14 @@ $(BUILD)/treenet_repeaters: tests/sim/test_repeaters.c $(SIM_OBJ) $(LIB) | $(BUI
 
 repeaters: $(BUILD)/treenet_repeaters
 	$(BUILD)/treenet_repeaters
+
+STRESS_SRC := tests/stress/stress_main.c tests/stress/test_ringbuf_threads.c tests/stress/test_treenet_threads.c
+
+$(BUILD)/stress: $(STRESS_SRC) $(LIB) | $(BUILD)
+	$(CC) $(CFLAGS) $(CPPFLAGS) -Itests/stress $(STRESS_SRC) $(LIB) -o $@ $(LDLIBS) $(THREAD_LIBS)
+
+stress: $(BUILD)/stress
+	$(BUILD)/stress
 
 clean:
 	$(RMDIR) $(BUILD)

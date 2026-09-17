@@ -21,6 +21,26 @@ extern "C" {
 #endif
 
 /* ------------------------------------------------------------------------- */
+/* Compiler memory barrier                                                    */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * @brief Compiler memory barrier for the lock-free receive ring.
+ *
+ * Prevents the compiler from reordering payload accesses around the
+ * publication of the ring indices. On the single-core targets treenity
+ * supports this is sufficient; weakly ordered multi-core systems would need
+ * hardware acquire/release barriers.
+ */
+#if defined(__GNUC__) || defined(__clang__)
+#define TN_BARRIER() __asm__ volatile("" ::: "memory")
+#elif defined(_MSC_VER)
+#define TN_BARRIER() _ReadWriteBarrier()
+#else
+#define TN_BARRIER() ((void)0)
+#endif
+
+/* ------------------------------------------------------------------------- */
 /* Min / max / clamp                                                          */
 /* ------------------------------------------------------------------------- */
 

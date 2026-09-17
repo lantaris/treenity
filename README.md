@@ -42,6 +42,9 @@ every received packet.
   `config.h`.
 - **Cooperative model.** Non-blocking `treenet_poll()`; the receive path
   (`treenet_rx`) is safe to call from an interrupt.
+- **Lock-free ISR receive.** The receive ring is a lock-free
+  single-producer/single-consumer buffer, so `treenet_rx` needs no critical
+  section (one producer, one consumer).
 - **Link quality from RSSI/SNR.** EWMA RSSI/SNR, PDR from beacons, ETX and a
   composite link cost; the values are exposed to the application.
 - **Smart parent selection.** An objective function plus hysteresis and
@@ -111,6 +114,7 @@ make test       # build and run the tests
 make run        # build and run the example
 make fuzz       # fuzzing
 make repeaters  # stress report: 1 Master + 30 repeaters
+make stress     # multi-threaded concurrency tests
 ```
 
 ### ARM cross-build

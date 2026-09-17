@@ -68,6 +68,18 @@ add_executable(treenet_repeaters tests/sim/test_repeaters.c)
 target_link_libraries(treenet_repeaters PRIVATE treenet_sim)
 add_test(NAME treenity_repeaters COMMAND treenet_repeaters)
 
+# --- Concurrency stress tests (threaded; run manually with `make stress`) ---
+find_package(Threads REQUIRED)
+add_executable(treenet_stress
+    tests/stress/stress_main.c
+    tests/stress/test_ringbuf_threads.c
+    tests/stress/test_treenet_threads.c
+)
+target_include_directories(treenet_stress PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/stress)
+target_link_libraries(treenet_stress PRIVATE treenet Threads::Threads)
+# Not registered with ctest on purpose; run it explicitly.
+
 # --- Optional freestanding cross-build check -------------------------------
 # Example: cmake -S . -B build-arm -DCMAKE_C_COMPILER=arm-none-eabi-gcc
 # The core library has no dependency on the C library beyond string.h/stdint.h.

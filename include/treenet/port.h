@@ -77,14 +77,6 @@ typedef bool (*treenet_channel_free_fn)(void);
 typedef int (*treenet_set_radio_fn)(const treenet_radio_cfg_t *cfg);
 
 /**
- * @brief Optional critical-section entry/exit pair.
- *
- * Used to protect the receive ring buffer when @ref treenet_rx may be called
- * from an interrupt context. On single threaded ports both may be NULL.
- */
-typedef void (*treenet_critical_fn)(void);
-
-/**
  * @brief Optional logging sink.
  *
  * @param level 0=error 1=warn 2=info 3=debug
@@ -125,8 +117,6 @@ typedef struct {
 
     treenet_channel_free_fn channel_free;  /**< optional: CAD */
     treenet_set_radio_fn    set_radio;     /**< optional: radio reconfig */
-    treenet_critical_fn     critical_enter;/**< optional: IRQ disable */
-    treenet_critical_fn     critical_exit; /**< optional: IRQ enable */
     treenet_log_fn          log;           /**< optional: log sink */
     treenet_timer_arm_fn    timer_arm;     /**< optional: tickless wake timer */
 } treenet_port_t;

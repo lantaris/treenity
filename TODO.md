@@ -28,6 +28,18 @@ Tracked work items for treenity. `[x]` done, `[ ]` planned.
   before it reconnects, and the reconnection time under active traffic (not just
   idle beacon timeout). Update the docs.
 
+## Concurrency
+
+- [x] **Lock-free SPSC receive ring.** The receive ring is now a lock-free
+  single-producer/single-consumer buffer (producer `treenet_rx`, consumer
+  `treenet_poll`); the `critical_enter`/`critical_exit` port hooks were removed.
+- [x] **Concurrency stress tests** (`make stress`): ring level (1,000,000
+  records, one producer / one consumer) and library level (`treenet_rx` in one
+  thread, `treenet_poll` in another) with exact loss/corruption checks.
+- [ ] **Thread-safety policy.** Decide whether to document the model only (one
+  poll context, ISR-safe rx, independent instances) or add an optional port
+  mutex hook for multi-threaded ports.
+
 ## Future
 
 - [ ] **End-to-end delivery acknowledgement.** Optional ACK from the final

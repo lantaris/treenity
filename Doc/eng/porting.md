@@ -42,7 +42,6 @@ only backoff jitter and beacon scheduling use it.
 |---|---|---|
 | `channel_free()` | CAD: `true` when the medium is free | assumed always free |
 | `set_radio(cfg)` | change SF/BW/power | changes are ignored |
-| `critical_enter()/exit()` | protect the receive ring buffer | no protection |
 | `log(level,msg)` | diagnostics output | logging disabled |
 | `timer_arm(delay_ms)` | arm the wake timer (tickless) | you call `treenet_poll()` yourself |
 
@@ -57,9 +56,10 @@ void radio_rx_isr(const uint8_t *data, size_t len, int16_t rssi, int8_t snr)
 }
 ```
 
-`treenet_rx` does no heavy work and is safe in an interrupt. If the interrupt
-can preempt `treenet_poll` while it works with the buffer, provide
-`critical_enter/exit` — they are used around the buffer write.
+`treenet_rx` does no heavy work and is safe in an interrupt. The receive ring is
+**lock-free** (one producer, `treenet_rx`; one consumer, `treenet_poll`), so no
+critical section is needed. `treenet_rx` must be called from exactly **one**
+context (the modem receive handler).
 
 ## 4. Example port (SX126x + HAL)
 
@@ -86,14 +86,11 @@ static void my_set_radio(const treenet_radio_cfg_t *cfg)
     sx126x_set_tx_power(cfg->tx_power_dbm);
 }
 
-static void my_crit_enter(void) { hal_irq_disable(); }
-static void my_crit_exit(void)  { hal_irq_enable();  }
 static void my_log(int level, const char *msg) { uart_printf("[%d] %s\n", level, msg); }
 
 static const treenet_port_t port = {
     .tx = my_tx, .now_ms = my_now, .rnd = my_rnd,
     .channel_free = my_channel_free, .set_radio = my_set_radio,
-    .critical_enter = my_crit_enter, .critical_exit = my_crit_exit,
     .log = my_log,
 };
 

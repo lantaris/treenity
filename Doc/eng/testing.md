@@ -28,6 +28,7 @@ make example   # build the example
 make run       # build and run the example
 make fuzz      # fuzzing (200000 iterations)
 make repeaters # report: 1 Master + 30 repeaters (stress scenarios)
+make stress    # multi-threaded concurrency tests (ring and library)
 ```
 
 ### ARM cross-build
@@ -110,6 +111,17 @@ After every input the invariants of the live instance are checked: neighbour and
 route table sizes, `rank`/`connected` consistency, absence of a self-parent,
 correct Master state. A violation calls `abort()`. It builds both as a normal
 executable and with libFuzzer (`-DTREENET_LIBFUZZER`).
+
+### Concurrency stress tests (`tests/stress/`)
+
+Two multi-threaded tests (`make stress`, not part of `ctest`):
+
+1. **Ring level** — a producer thread and a consumer thread run 1,000,000
+   records; every record must arrive intact and in order (no lost index updates
+   in the lock-free SPSC ring).
+2. **Library level** — one thread feeds valid BEACON frames through
+   `treenet_rx`, another drives `treenet_poll`; the number of accepted frames
+   must equal the number processed (no loss or corruption).
 
 ### Repeater report (`tests/sim/test_repeaters.c`)
 

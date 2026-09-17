@@ -235,7 +235,7 @@ a parent.
 ## 7. Port (brief)
 
 Mandatory port functions: `tx`, `now_ms`, `rnd`. Optional: `channel_free`,
-`set_radio`, `critical_enter/exit`, `log`, `timer_arm`. Details in
+`set_radio`, `log`, `timer_arm`. Details in
 [porting.md](porting.md).
 
 ---

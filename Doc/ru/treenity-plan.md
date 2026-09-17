@@ -48,8 +48,8 @@ mesh-algo, Contiki-NG NETSTACK, Semtech AN1200.13 (время в эфире).
 Слои (снизу вверх): **PORT → Core → MAC → Link → Routing → API**.
 
 - **PORT** (`include/treenet/port.h`) — реализует пользователь:
-  `tx`, `now_ms`, `rnd` обязательны; `channel_free`, `set_radio`,
-  `critical_enter/exit`, `log` опциональны. Приём — `treenet_rx(buf,len,rssi,snr)`.
+  `tx`, `now_ms`, `rnd` обязательны; `channel_free`, `set_radio`, `log`,
+  `timer_arm` опциональны. Приём — `treenet_rx(buf,len,rssi,snr)`.
 - **Core** (`src/core`): ring-buffer приёма, таймеры, EWMA, утилиты, контекст.
 - **MAC** (`src/mac`): кодек кадра, dup-cache, CSMA/CA, фрагментация, время в
   эфире.
@@ -73,7 +73,7 @@ mesh-algo, Contiki-NG NETSTACK, Semtech AN1200.13 (время в эфире).
 | Внутренний контекст | `src/core/internal.h` | ✅ |
 | Утилиты | `src/core/util.h` | ✅ |
 | EWMA | `src/core/ewma.h` | ✅ |
-| Ring-buffer | `src/core/ringbuf.[ch]` | ✅ |
+| Ring-buffer (lock-free SPSC) | `src/core/ringbuf.[ch]` | ✅ |
 | Таймеры | `src/core/timer.[ch]` | ✅ |
 | Кадр/кодек | `src/mac/frame.[ch]` | ✅ |
 | Контроль целостности (CRC-16) | `src/mac/frame.[ch]` | ✅ |
@@ -137,6 +137,9 @@ mesh-algo, Contiki-NG NETSTACK, Semtech AN1200.13 (время в эфире).
   чужой `net_id` игнорируется.
 - **Fuzzing** — мутационный (от корпуса валидных кадров) + случайный ввод,
   300 000 итераций без падений и нарушений инвариантов.
+- **Стресс-тесты конкурентности** (`make stress`): ринг (1 млн записей, 1
+  производитель / 1 потребитель) и библиотека (`treenet_rx` в одном потоке,
+  `treenet_poll` в другом) — без потерь и порчи.
 - Сборка без предупреждений с `-Wall -Wextra`.
 - Пример: сеть Master + 5 узлов на ~1 км, Rank 0/8/16/24/32/40, unicast в обе
   стороны и broadcast доставляются.

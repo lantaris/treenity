@@ -40,8 +40,8 @@ static void treenet_task(void *arg)
 ```
 
 `treenet_rx` may be called from an ISR (it is `...FromISR`-safe because it only
-copies). If the ISR can preempt the task, provide `critical_enter/exit` (for
-example `taskENTER_CRITICAL`/`taskEXIT_CRITICAL`).
+copies). The receive ring is **lock-free**, so no critical section is needed;
+`treenet_rx` is called from one context only.
 
 ## 2.1. Tickless (power saving)
 
@@ -77,6 +77,18 @@ for (;;) {
 
 If `timer_arm` is not implemented (`NULL`), use the periodic polling variant
 from section 1.
+
+## 2.2. Concurrency
+
+- `treenet_poll()` — from **one** context (the main loop or one RTOS task). Do
+  not call it from a timer ISR: set a flag and poll from the main loop (see 2.1).
+- `treenet_rx()` — from the modem receive handler (ISR). The receive ring is
+  **lock-free**, no critical section is needed; call it from one context only
+  (the sole producer).
+- `treenet_send`/`treenet_broadcast` and introspection — from the same context
+  as `poll`.
+- Instances are independent (no global state); when driven from different
+  threads, port thread-safety is your responsibility.
 
 ## 3. Receiving data
 

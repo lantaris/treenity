@@ -80,12 +80,26 @@ and never use dynamic memory.
 
 ## 5. Threading and ISR model
 
-- The library is single threaded. All state is mutated inside `treenet_poll()`.
-- `treenet_rx()` may be called from an interrupt: it only copies the frame into
-  a ring buffer. To protect against races the port may provide
-  `critical_enter`/`critical_exit` (briefly disabling interrupts).
-- `treenet_poll()` must be called often enough. The recommended period is
-  10–100 ms. Calling it too rarely increases retransmission and timer latency.
+The library is **single threaded**, but the receive path is designed to be
+called from an interrupt.
+
+- **One context for `treenet_poll()`.** All state (neighbours, routes, parent,
+  transmit slots, events) is mutated only inside `poll`. Calling `poll` from two
+  contexts (for example a timer ISR and the main loop) is not allowed — the
+  library is not reentrant.
+- **`treenet_rx()` comes from the modem interrupt.** The receive ring is a
+  **lock-free SPSC** buffer: exactly one producer (`treenet_rx`) and one consumer
+  (`poll`); no critical section is needed. The function only copies the frame
+  into the buffer.
+- **`treenet_send`/`treenet_broadcast` and introspection** must run in the same
+  context as `poll` (otherwise races on the transmit slots/routes and torn
+  reads).
+- **Instances are independent** — the library has no global state, so different
+  contexts may be driven from different threads as long as the port is
+  thread-safe.
+- **Target MCUs are 32-bit (or wider)**: lock-free requires atomic word-sized
+  index accesses; this is enforced by a compile-time check in `config.h`.
+- Call `treenet_poll()` often enough (10–100 ms) or from `timer_arm` (tickless).
 
 ## 6. Roles
 

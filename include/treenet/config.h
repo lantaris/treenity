@@ -18,6 +18,17 @@
 #include "treenet_config.h"
 #endif
 
+#include <stdint.h>
+
+/*
+ * Target requirement: treenity targets 32-bit (or wider) microcontrollers. The
+ * lock-free receive ring relies on word-sized index loads/stores being atomic,
+ * which is not guaranteed on 8/16-bit cores.
+ */
+#if defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF)
+#error "treenity targets 32-bit (or wider) MCUs: the lock-free receive ring requires atomic word-sized index access"
+#endif
+
 /* ------------------------------------------------------------------------- */
 /* Version                                                                    */
 /* ------------------------------------------------------------------------- */

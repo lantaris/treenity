@@ -841,11 +841,9 @@ int treenet_rx(treenet_t *t, const uint8_t *buf, size_t len,
     meta.rssi_dbm = rssi;
     meta.snr_db = snr;
 
-    if (t->port.critical_enter != NULL) t->port.critical_enter();
-    bool ok = tn_ringbuf_push(&t->rx, &meta, buf);
-    if (t->port.critical_exit != NULL) t->port.critical_exit();
-
-    return ok ? 0 : -1;
+    /* The receive ring is lock-free single-producer/single-consumer: this
+     * function is the sole producer, so no critical section is needed. */
+    return tn_ringbuf_push(&t->rx, &meta, buf) ? 0 : -1;
 }
 
 /* ========================================================================= */
