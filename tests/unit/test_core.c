@@ -12,6 +12,7 @@
 #include "mac/frame.h"
 #include "mac/dupcache.h"
 #include "mac/airtime.h"
+#include "treenet/treenet.h"
 
 /* ------------------------------------------------------------------------- */
 
@@ -200,6 +201,26 @@ static void test_airtime_monotonic(void)
     CHECK(large < 600000u);
 }
 
+static void test_context_size(void)
+{
+    /* The context holds all fixed tables; the examples size their buffer for
+     * the default configuration, so guard against an accidental shrink. */
+    CHECK(treenet_context_size() >= 8192u);
+}
+
+static void test_airtime_invalid_params(void)
+{
+    /* Out-of-range LoRa parameters must not trigger an undefined shift; the
+     * estimate falls back to the generic linear model. */
+    tn_lora_params_t bad = { 200, 125000, 1, 16, 1, 1 };
+    CHECK(tn_lora_toa_us(&bad, 100) > 0);
+    CHECK(tn_airtime_estimate_us(&bad, 100) > 0);
+
+    tn_lora_params_t zero = { 0, 0, 0, 0, 0, 0 };
+    CHECK(tn_lora_toa_us(&zero, 100) > 0);
+    CHECK(tn_airtime_estimate_us(&zero, 100) > 0);
+}
+
 void run_core_tests(void)
 {
     RUN_TEST(test_time_wrap);
@@ -217,4 +238,6 @@ void run_core_tests(void)
     RUN_TEST(test_beacon_roundtrip);
     RUN_TEST(test_dao_roundtrip);
     RUN_TEST(test_airtime_monotonic);
+    RUN_TEST(test_airtime_invalid_params);
+    RUN_TEST(test_context_size);
 }

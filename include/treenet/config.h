@@ -117,6 +117,29 @@
 #define TREENET_REASSEMBLY_SLOTS 2u
 #endif
 
+/*
+ * Table sizes must be non-zero: several modules use `% TREENET_*_SIZE` or
+ * index entries[0] and would invoke undefined behaviour with a zero size.
+ */
+#if TREENET_MAX_NEIGHBORS < 1
+#error "TREENET_MAX_NEIGHBORS must be >= 1"
+#endif
+#if TREENET_MAX_ROUTES < 1
+#error "TREENET_MAX_ROUTES must be >= 1"
+#endif
+#if TREENET_DUP_CACHE_SIZE < 1
+#error "TREENET_DUP_CACHE_SIZE must be >= 1"
+#endif
+#if TREENET_TX_QUEUE_SIZE < 1
+#error "TREENET_TX_QUEUE_SIZE must be >= 1"
+#endif
+#if TREENET_EVENT_QUEUE_SIZE < 1
+#error "TREENET_EVENT_QUEUE_SIZE must be >= 1"
+#endif
+#if TREENET_REASSEMBLY_SLOTS < 1
+#error "TREENET_REASSEMBLY_SLOTS must be >= 1"
+#endif
+
 /* ------------------------------------------------------------------------- */
 /* Timing (milliseconds)                                                      */
 /* ------------------------------------------------------------------------- */
@@ -268,7 +291,13 @@
 /* Feature switches                                                           */
 /* ------------------------------------------------------------------------- */
 
-/** Include runtime statistics counters. */
+/**
+ * Include runtime statistics counters.
+ *
+ * When 0 every counter update (TN_STAT_INC/TN_STAT_ADD in src/core/internal.h)
+ * compiles away; the statistics block still exists and treenet_stats() remains
+ * valid, it just stays zeroed.
+ */
 #ifndef TREENET_ENABLE_STATS
 #define TREENET_ENABLE_STATS 1
 #endif
@@ -300,9 +329,11 @@
 #endif
 
 /**
- * Enable security hooks. When 1 the frame layout reserves a security header
- * field and the port may plug in encryption later. No cryptography is provided
- * by v1 of the library.
+ * Security hooks (reserved, not implemented in v0.1.0).
+ *
+ * The frame layout reserves the `sec` header byte and the `TN_FLAG_SEC` flag so
+ * a port may plug in encryption later. No cryptography is provided by v1 of the
+ * library: this switch currently only documents the reserved layout.
  */
 #ifndef TREENET_ENABLE_SECURITY_HOOKS
 #define TREENET_ENABLE_SECURITY_HOOKS 1

@@ -537,8 +537,43 @@ static void test_neighbor_metrics(void)
     sim_destroy(s);
 }
 
+static int tn_test_tx(const uint8_t *b, size_t n) { (void)b; (void)n; return 0; }
+static uint32_t tn_test_now(void) { return 0; }
+static uint32_t tn_test_rnd(void) { return 1; }
+
+static void test_init_validation(void)
+{
+    static union {
+        uint64_t align;
+        uint8_t  bytes[16384];
+    } ctx;
+
+    treenet_port_t port;
+    memset(&port, 0, sizeof(port));
+    port.tx = tn_test_tx;
+    port.now_ms = tn_test_now;
+    port.rnd = tn_test_rnd;
+
+    treenet_config_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.addr = 0x1234;
+    cfg.role = TREENET_ROLE_NODE;
+    cfg.net_id = 1;
+
+    CHECK(treenet_init(ctx.bytes, sizeof ctx.bytes, &cfg, &port) != NULL);
+
+    cfg.role = (treenet_role_t)99; /* unknown role */
+    CHECK(treenet_init(ctx.bytes, sizeof ctx.bytes, &cfg, &port) == NULL);
+    cfg.role = TREENET_ROLE_NODE;
+
+    CHECK(treenet_init(ctx.bytes, 16u, &cfg, &port) == NULL); /* too small */
+    CHECK(treenet_init(ctx.bytes + 1u, sizeof ctx.bytes - 1u,
+                       &cfg, &port) == NULL); /* unaligned */
+}
+
 void run_mesh_tests(void)
 {
+    RUN_TEST(test_init_validation);
     RUN_TEST(test_network_forms);
     RUN_TEST(test_rank_ordering);
     RUN_TEST(test_unicast_down_and_up);

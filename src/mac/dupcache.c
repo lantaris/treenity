@@ -14,11 +14,6 @@ void tn_dupcache_init(tn_dupcache_t *c, uint32_t ttl_ms)
     c->ttl_ms = ttl_ms;
 }
 
-void tn_dupcache_reset(tn_dupcache_t *c)
-{
-    memset(c->entries, 0, sizeof(c->entries));
-}
-
 /* Deterministic hash over the (src, seq) pair. */
 static size_t dup_slot(treenet_addr_t src, uint16_t seq)
 {

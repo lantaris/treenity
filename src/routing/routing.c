@@ -89,17 +89,6 @@ tn_route_t *tn_route_add(tn_route_table_t *t, treenet_addr_t dst,
     return r;
 }
 
-void tn_route_remove(tn_route_table_t *t, treenet_addr_t dst)
-{
-    for (size_t i = 0; i < TREENET_MAX_ROUTES; i++) {
-        tn_route_t *r = &t->entries[i];
-        if (r->valid && r->dst == dst) {
-            r->valid = false;
-            if (t->count > 0) t->count--;
-        }
-    }
-}
-
 uint32_t tn_route_remove_via(tn_route_table_t *t, treenet_addr_t next_hop)
 {
     uint32_t removed = 0;
@@ -211,7 +200,7 @@ static void routing_set_parent(treenet_t *t, treenet_addr_t new_parent,
         tn_emit_event(t, TREENET_EV_JOINED, NULL);
         tn_emit_event(t, TREENET_EV_NETWORK_READY, NULL);
     } else if (changed) {
-        t->stats.parent_changes++;
+        TN_STAT_INC(t, parent_changes);
         treenet_addr_t *arg = &t->parent;
         tn_emit_event(t, TREENET_EV_PARENT_CHANGED, arg);
     }

@@ -25,19 +25,30 @@ extern "C" {
 /* ------------------------------------------------------------------------- */
 
 /**
- * @brief Compiler memory barrier for the lock-free receive ring.
+ * @brief Memory barriers for the lock-free receive ring.
  *
- * Prevents the compiler from reordering payload accesses around the
- * publication of the ring indices. On the single-core targets treenity
- * supports this is sufficient; weakly ordered multi-core systems would need
- * hardware acquire/release barriers.
+ * @c TN_BARRIER() is a pure compiler barrier. The ring additionally uses
+ * @c TN_PUBLISH() (release) when the producer publishes a record and
+ * @c TN_CONSUME() (acquire) when the consumer reads one. On weakly ordered
+ * multi-core targets (for example ESP32 or RP2040) the release/acquire fences
+ * emit the required hardware barrier (DMB on ARM); on x86 they are effectively
+ * free. Without them a second core could observe an updated index before the
+ * payload it refers to.
  */
 #if defined(__GNUC__) || defined(__clang__)
 #define TN_BARRIER() __asm__ volatile("" ::: "memory")
+#define TN_PUBLISH() __atomic_thread_fence(__ATOMIC_RELEASE)
+#define TN_CONSUME() __atomic_thread_fence(__ATOMIC_ACQUIRE)
 #elif defined(_MSC_VER)
+#include <intrin.h>
+#include <windows.h>
 #define TN_BARRIER() _ReadWriteBarrier()
+#define TN_PUBLISH() do { _ReadWriteBarrier(); MemoryBarrier(); } while (0)
+#define TN_CONSUME() do { MemoryBarrier(); _ReadWriteBarrier(); } while (0)
 #else
 #define TN_BARRIER() ((void)0)
+#define TN_PUBLISH() ((void)0)
+#define TN_CONSUME() ((void)0)
 #endif
 
 /* ------------------------------------------------------------------------- */

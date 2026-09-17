@@ -67,16 +67,6 @@ typedef uint32_t (*treenet_rnd_fn)(void);
 typedef bool (*treenet_channel_free_fn)(void);
 
 /**
- * @brief Optional radio reconfiguration hook.
- *
- * Called when the routing layer wants to change radio parameters (for example
- * to trade range for airtime). Ports that do not support it leave it NULL.
- *
- * @return 0 on success, negative on failure
- */
-typedef int (*treenet_set_radio_fn)(const treenet_radio_cfg_t *cfg);
-
-/**
  * @brief Optional logging sink.
  *
  * @param level 0=error 1=warn 2=info 3=debug
@@ -116,7 +106,6 @@ typedef struct {
     treenet_rnd_fn          rnd;           /**< mandatory: random source */
 
     treenet_channel_free_fn channel_free;  /**< optional: CAD */
-    treenet_set_radio_fn    set_radio;     /**< optional: radio reconfig */
     treenet_log_fn          log;           /**< optional: log sink */
     treenet_timer_arm_fn    timer_arm;     /**< optional: tickless wake timer */
 } treenet_port_t;

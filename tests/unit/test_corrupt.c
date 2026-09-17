@@ -383,6 +383,61 @@ static void test_malformed_fragments(void)
     sim_destroy(s);
 }
 
+static void test_duplicate_unicast_suppressed(void)
+{
+    /* A reliable unicast retransmitted after a lost ACK must be ACKed again but
+     * delivered to the application only once. */
+    sim_t *s = make_net();
+    uint32_t before = sim_find(s, 2)->datagrams_rx;
+
+    uint8_t payload[4] = { 1, 2, 3, 4 };
+    uint8_t buf[TREENET_MTU];
+    tn_frame_t f;
+    memset(&f, 0, sizeof(f));
+    f.version = TREENET_PROTOCOL_VERSION;
+    f.type = TREENET_FRAME_DATA;
+    f.flags = TN_FLAG_WANT_ACK;
+    f.src = 1; f.dst = 2; f.seq = 42; f.net_id = 1; f.hop_limit = 8; f.prev = 1;
+    f.payload = payload; f.payload_len = sizeof(payload);
+    size_t len = tn_frame_encode(buf, sizeof(buf), &f);
+    CHECK(len > 0);
+
+    inject(s, 2, buf, len); /* first copy: delivered */
+    inject(s, 2, buf, len); /* retransmission: suppressed */
+
+    CHECK_EQ(sim_find(s, 2)->datagrams_rx, before + 1u);
+    sim_destroy(s);
+}
+
+static void test_fragmented_send_queue_full(void)
+{
+    /* A datagram that needs several fragments must be refused as a whole when
+     * the transmit queue cannot hold all of them. */
+    sim_t *s = make_net();
+    treenet_t *t = sim_find(s, 2)->net;
+
+    uint8_t big[TREENET_MAX_DATAGRAM];
+    memset(big, 0x5A, sizeof(big));
+
+    /* Fill the queue with unacknowledged frames: no simulation step runs, so
+     * no ACK can free a slot. */
+    for (unsigned i = 0; i < 64; i++) {
+        uint8_t one = 0x11;
+        (void)treenet_send(t, 1, &one, 1);
+    }
+    size_t free_slots = 0;
+    for (size_t i = 0; i < TREENET_TX_QUEUE_SIZE; i++) {
+        if (!t->tx[i].valid) free_slots++;
+    }
+    CHECK_EQ(free_slots, 0u);
+
+    uint32_t dgrams_before = t->stats.datagrams_tx;
+    CHECK_EQ(treenet_send(t, 1, big, sizeof(big)), -1);
+    CHECK_EQ(t->stats.datagrams_tx, dgrams_before);
+
+    sim_destroy(s);
+}
+
 void run_corrupt_tests(void)
 {
 #if TREENET_ENABLE_FRAME_CRC
@@ -397,4 +452,6 @@ void run_corrupt_tests(void)
     RUN_TEST(test_malformed_beacon_semantics);
     RUN_TEST(test_malformed_dao);
     RUN_TEST(test_malformed_fragments);
+    RUN_TEST(test_duplicate_unicast_suppressed);
+    RUN_TEST(test_fragmented_send_queue_full);
 }

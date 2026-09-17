@@ -14,8 +14,14 @@ static uint32_t ceil_div(uint32_t a, uint32_t b)
 
 uint32_t tn_lora_toa_us(const tn_lora_params_t *p, size_t bytes)
 {
-    if (p == NULL || p->sf == 0 || p->bw_hz == 0) {
-        return tn_airtime_estimate_us(p, bytes);
+    /* Reject parameters outside the LoRa ranges (SF 6..12, CR 1..4, BW > 0):
+     * shifting 1 by an out-of-range SF would be undefined behaviour. Fall back
+     * to the conservative linear estimate directly (calling
+     * tn_airtime_estimate_us() here would recurse). */
+    if (p == NULL || p->bw_hz == 0 ||
+        p->sf < 6 || p->sf > 12 ||
+        p->cr < 1 || p->cr > 4) {
+        return (uint32_t)bytes * 1000u;
     }
 
     const int32_t sf = (int32_t)p->sf;
@@ -48,7 +54,8 @@ uint32_t tn_lora_toa_us(const tn_lora_params_t *p, size_t bytes)
 
 uint32_t tn_airtime_estimate_us(const tn_lora_params_t *lora, size_t bytes)
 {
-    if (lora != NULL && lora->sf != 0) {
+    if (lora != NULL && lora->sf >= 6 && lora->sf <= 12 &&
+        lora->bw_hz != 0 && lora->cr >= 1 && lora->cr <= 4) {
         return tn_lora_toa_us(lora, bytes);
     }
     /* Conservative generic fallback: 1 ms per byte. */

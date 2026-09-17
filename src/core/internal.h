@@ -38,6 +38,24 @@ extern "C" {
 #endif
 
 /* ------------------------------------------------------------------------- */
+/* Statistics                                                                 */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * @brief Update a statistics counter only when TREENET_ENABLE_STATS is set.
+ *
+ * With statistics disabled every update compiles away; the statistics block is
+ * still present (zeroed) so treenet_stats() keeps returning a valid pointer.
+ */
+#if TREENET_ENABLE_STATS
+#define TN_STAT_INC(t, field) ((t)->stats.field++)
+#define TN_STAT_ADD(t, field, v) ((t)->stats.field += (v))
+#else
+#define TN_STAT_INC(t, field) ((void)(t))
+#define TN_STAT_ADD(t, field, v) ((void)(t), (void)(v))
+#endif
+
+/* ------------------------------------------------------------------------- */
 /* Transmit slot                                                              */
 /* ------------------------------------------------------------------------- */
 

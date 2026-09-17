@@ -107,7 +107,7 @@ ctest --test-dir build --output-on-failure
 ```
 
 Targets: `treenet` (core), `treenet_sim` (simulator), `treenet_tests`,
-`treenet_fuzz`, `treenet_example`.
+`treenet_fuzz`, `treenet_example`, `treenet_repeaters`, `treenet_stress`.
 
 ### Make
 
@@ -151,7 +151,7 @@ static const treenet_port_t port = {
 };
 
 /* 2. Context and configuration */
-static uint8_t ctx[4096];   /* >= treenet_context_size() */
+static uint8_t ctx[16384];  /* >= treenet_context_size(); ~11.4 KB by default */
 
 static void on_recv(treenet_t *t, treenet_addr_t src, const uint8_t *data,
                     size_t len, int16_t rssi, int8_t snr, uint8_t hops)
@@ -216,7 +216,7 @@ treenity/
 ## Testing
 
 ```sh
-make test          # unit + scenario tests (1904 checks)
+make test          # unit + scenario tests (1918 checks)
 make fuzz          # fuzzing, 200000 iterations
 ```
 

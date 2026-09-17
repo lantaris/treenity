@@ -99,6 +99,11 @@ called from an interrupt.
   thread-safe.
 - **Target MCUs are 32-bit (or wider)**: lock-free requires atomic word-sized
   index accesses; this is enforced by a compile-time check in `config.h`.
+- **Memory ordering.** The producer publishes with a release fence and the
+  consumer reads with an acquire fence (`TN_PUBLISH`/`TN_CONSUME` in `util.h`),
+  which emit a hardware barrier (DMB) on weakly ordered cores. The ring is
+  therefore safe on multi-core MCUs (e.g. ESP32) **as long as** the
+  single-producer / single-consumer rule is respected.
 - Call `treenet_poll()` often enough (10–100 ms) or from `timer_arm` (tickless).
 
 **Multi-threading: the caller synchronizes.** If the application calls the
@@ -137,11 +142,9 @@ runs before the threads start, so it needs no mutex.
 
 ## 8. Extension points
 
-- **Security.** The `sec` header byte and the `TN_FLAG_SEC` flag are reserved.
-  A port may encrypt the payload before `tx` and decrypt it after
-  `treenet_rx`.
-- **Radio reconfiguration.** `port.set_radio` is called when the upper layer
-  wants to change SF/BW/power.
+- **Security** (reserved, not implemented in v0.1.0). The `sec` header byte and
+  the `TN_FLAG_SEC` flag are placeholders. A port may encrypt the payload before
+  `tx` and decrypt it after `treenet_rx`.
 - **Metrics.** `treenet_neighbors()` and `treenet_stats()` give the application
   access to live link quality estimates and counters.
 

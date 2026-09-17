@@ -48,7 +48,7 @@ mesh-algo, Contiki-NG NETSTACK, Semtech AN1200.13 (время в эфире).
 Слои (снизу вверх): **PORT → Core → MAC → Link → Routing → API**.
 
 - **PORT** (`include/treenet/port.h`) — реализует пользователь:
-  `tx`, `now_ms`, `rnd` обязательны; `channel_free`, `set_radio`, `log`,
+  `tx`, `now_ms`, `rnd` обязательны; `channel_free`, `log`,
   `timer_arm` опциональны. Приём — `treenet_rx(buf,len,rssi,snr)`.
 - **Core** (`src/core`): ring-buffer приёма, таймеры, EWMA, утилиты, контекст.
 - **MAC** (`src/mac`): кодек кадра, dup-cache, CSMA/CA, фрагментация, время в
@@ -128,7 +128,7 @@ mesh-algo, Contiki-NG NETSTACK, Semtech AN1200.13 (время в эфире).
 
 ## 6. Верификация (текущая)
 
-- **1904 проверки**, 0 провалов (`make test`, `ctest`).
+- **1918 проверок**, 0 провалов (`make test`, `ctest`).
 - Сценарии: формирование сети, порядок Rank, unicast вниз/вверх, broadcast,
   бесшовное перестроение при отказе ретранслятора, сброс интервала beacon при
   смене родителя, устойчивость к битовым ошибкам, метрики соседей.

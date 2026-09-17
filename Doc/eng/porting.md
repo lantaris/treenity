@@ -41,7 +41,6 @@ only backoff jitter and beacon scheduling use it.
 | Function | Purpose | If `NULL` |
 |---|---|---|
 | `channel_free()` | CAD: `true` when the medium is free | assumed always free |
-| `set_radio(cfg)` | change SF/BW/power | changes are ignored |
 | `log(level,msg)` | diagnostics output | logging disabled |
 | `timer_arm(delay_ms)` | arm the wake timer (tickless) | you call `treenet_poll()` yourself |
 
@@ -80,17 +79,11 @@ static bool my_channel_free(void)
     return sx126x_cad() == CAD_FREE;
 }
 
-static void my_set_radio(const treenet_radio_cfg_t *cfg)
-{
-    sx126x_set_sf_bw(cfg->spreading_factor, cfg->bandwidth_hz);
-    sx126x_set_tx_power(cfg->tx_power_dbm);
-}
-
 static void my_log(int level, const char *msg) { uart_printf("[%d] %s\n", level, msg); }
 
 static const treenet_port_t port = {
     .tx = my_tx, .now_ms = my_now, .rnd = my_rnd,
-    .channel_free = my_channel_free, .set_radio = my_set_radio,
+    .channel_free = my_channel_free,
     .log = my_log,
 };
 
@@ -104,7 +97,7 @@ void radio_on_rx(const uint8_t *buf, size_t len, int16_t rssi, int8_t snr)
 ## 5. Node configuration
 
 ```c
-static uint8_t ctx[4096]; /* >= treenet_context_size() */
+static uint8_t ctx[16384]; /* >= treenet_context_size() */
 static treenet_t *g_node_storage;
 
 void treenet_setup(void)
@@ -128,11 +121,13 @@ void treenet_setup(void)
 
 ### Context size
 
-`treenet_context_size()` returns the exact size at run time. For a static buffer
-either use a size that is definitely large enough (for example 4096 bytes) and
-pass it to `treenet_init`, or obtain the size once and print it while porting.
-The size depends on the values in `config.h` (neighbour table, route table, MTU
-and so on).
+`treenet_context_size()` returns the exact size at run time. With the default
+`config.h` it is about 11.4 KB (measured: 11360 bytes on a 64-bit host), and it
+grows with the neighbour table, the route table, the receive ring and the
+reassembly slots. For a static buffer either use a size that is definitely large
+enough (for example 16384 bytes) and pass it to `treenet_init`, or obtain the
+size once at porting time and define a macro. The context must stay alive for
+the whole lifetime of the node and be aligned to at least 8 bytes.
 
 ## 6. Main loop and power saving
 

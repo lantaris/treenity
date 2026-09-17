@@ -58,9 +58,6 @@ tn_route_t *tn_route_add(tn_route_table_t *t, treenet_addr_t dst,
                          treenet_addr_t next_hop, uint16_t cost, uint8_t hops,
                          uint32_t now);
 
-/** @brief Remove the route to @p dst. */
-void tn_route_remove(tn_route_table_t *t, treenet_addr_t dst);
-
 /** @brief Remove every route whose next hop is @p next_hop. @return count. */
 uint32_t tn_route_remove_via(tn_route_table_t *t, treenet_addr_t next_hop);
 

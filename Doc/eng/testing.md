@@ -53,7 +53,8 @@ no OS.
 - duplicate cache;
 - frame, beacon, DAO and fragment codecs (round-trip and rejection of short
   input);
-- time-on-air monotonicity.
+- time-on-air monotonicity and robustness for out-of-range parameters;
+- context size floor (`treenet_context_size()`).
 
 ### Scenario tests (`tests/unit/test_mesh.c`)
 
@@ -76,7 +77,9 @@ On the simulator:
   parent is re-selected in seconds;
 - **coexisting networks**: two networks with different `net_id` in one area do
   not exchange data and do not see each other in the neighbour table;
-- neighbour metrics (RSSI/SNR/cost/parent).
+- neighbour metrics (RSSI/SNR/cost/parent);
+- **init validation**: an unknown role, too-small storage or an unaligned buffer
+  make `treenet_init` return `NULL`.
 
 ### Corruption tests (`tests/unit/test_corrupt.c`)
 
@@ -89,7 +92,9 @@ On the simulator:
 - a foreign `net_id` is ignored;
 - semantically broken frames: a short beacon payload, an impossible beacon
   interval, a DAO with `hops > MAX_HOPS`, malformed fragments (`count=0`,
-  `index>=count`, a short non-last fragment, a mismatched `count`).
+  `index>=count`, a short non-last fragment, a mismatched `count`);
+- a duplicate unicast is re-ACKed but delivered to the application once, and a
+  fragmented datagram is refused as a whole when the transmit queue is full.
 
 ### Bit-error scenario (`test_bit_errors_tolerated`)
 
@@ -149,7 +154,7 @@ treenity tests
 [mesh]
   test_seamless_reparenting ... ok
 
-1855 checks, 0 failures
+1918 checks, 0 failures
 ```
 
 A non-zero exit code means failure — convenient for CI.

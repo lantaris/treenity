@@ -46,9 +46,6 @@ void tn_dupcache_init(tn_dupcache_t *c, uint32_t ttl_ms);
 bool tn_dupcache_seen(tn_dupcache_t *c, treenet_addr_t src, uint16_t seq,
                       uint32_t now);
 
-/** @brief Forget all entries (e.g. after a role change). */
-void tn_dupcache_reset(tn_dupcache_t *c);
-
 #ifdef __cplusplus
 }
 #endif

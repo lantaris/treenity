@@ -106,7 +106,8 @@ ctest --test-dir build --output-on-failure
 ```
 
 Собираются цели: `treenet` (ядро), `treenet_sim` (симулятор),
-`treenet_tests`, `treenet_fuzz`, `treenet_example`.
+`treenet_tests`, `treenet_fuzz`, `treenet_example`, `treenet_repeaters`,
+`treenet_stress`.
 
 ### Make
 
@@ -150,7 +151,7 @@ static const treenet_port_t port = {
 };
 
 /* 2. Контекст и конфигурация */
-static uint8_t ctx[4096];   /* >= treenet_context_size() */
+static uint8_t ctx[16384];  /* >= treenet_context_size(); ~11.4 КБ по умолчанию */
 
 static void on_recv(treenet_t *t, treenet_addr_t src, const uint8_t *data,
                     size_t len, int16_t rssi, int8_t snr, uint8_t hops)
@@ -215,7 +216,7 @@ treenity/
 ## Тестирование
 
 ```sh
-make test          # юнит + сценарные тесты (1904 проверки)
+make test          # юнит + сценарные тесты (1918 проверок)
 make fuzz          # fuzzing 200000 итераций
 ```
 

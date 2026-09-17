@@ -23,7 +23,9 @@
   выделить буфер под `treenet_init`.
 - **Параметры:** нет.
 - **Возвращает:** размер в байтах (зависит от настроек `config.h`).
-- **Пример:** `static uint8_t ctx[512]; /* >= treenet_context_size() */`
+- **Пример:** `static uint8_t ctx[16384]; /* >= treenet_context_size() */`
+  Конфигурация по умолчанию требует около 11.4 КБ; точное значение зависит от
+  `config.h` и возвращается `treenet_context_size()`.
 
 ### `treenet_t *treenet_init(void *storage, size_t storage_size, const treenet_config_t *cfg, const treenet_port_t *port)`
 
@@ -93,6 +95,9 @@
   - `-2` — не помещается и фрагментация невозможна (слишком много фрагментов
     или выключена);
   - `-3` — нет маршрута к `dst`.
+- **Примечания:** датаграмма больше MTU фрагментируется; если очередь передачи
+  не может вместить **все** фрагменты, отправка целиком отклоняется с `-1`
+  (частично поставленная датаграмма никогда не соберётся).
 
 ### `int treenet_broadcast(treenet_t *t, const void *data, size_t len)`
 
@@ -235,7 +240,7 @@ void (*on_event)(treenet_t *t, treenet_event_t ev, void *arg);
 ## 7. Порт (кратко)
 
 Обязательные функции порта: `tx`, `now_ms`, `rnd`. Опциональные: `channel_free`,
-`set_radio`, `log`, `timer_arm`. Подробности — в
+`log`, `timer_arm`. Подробности — в
 [porting.md](porting.md).
 
 ---

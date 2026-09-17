@@ -40,7 +40,6 @@ backoff и расписание beacon-ов.
 | Функция | Назначение | Если `NULL` |
 |---|---|---|
 | `channel_free()` | CAD: `true`, если эфир свободен | считается, что всегда свободен |
-| `set_radio(cfg)` | смена SF/BW/мощности | изменения игнорируются |
 | `log(level,msg)` | вывод диагностики | лог отключён |
 | `timer_arm(delay_ms)` | взвести таймер пробуждения (tickless) | `treenet_poll()` вызываете сами |
 
@@ -80,17 +79,11 @@ static bool my_channel_free(void)
     return sx126x_cad() == CAD_FREE;
 }
 
-static void my_set_radio(const treenet_radio_cfg_t *cfg)
-{
-    sx126x_set_sf_bw(cfg->spreading_factor, cfg->bandwidth_hz);
-    sx126x_set_tx_power(cfg->tx_power_dbm);
-}
-
 static void my_log(int level, const char *msg) { uart_printf("[%d] %s\n", level, msg); }
 
 static const treenet_port_t port = {
     .tx = my_tx, .now_ms = my_now, .rnd = my_rnd,
-    .channel_free = my_channel_free, .set_radio = my_set_radio,
+    .channel_free = my_channel_free,
     .log = my_log,
 };
 
@@ -104,7 +97,7 @@ void radio_on_rx(const uint8_t *buf, size_t len, int16_t rssi, int8_t snr)
 ## 5. Конфигурация узла
 
 ```c
-static uint8_t ctx[4096]; /* >= treenet_context_size() */
+static uint8_t ctx[16384]; /* >= treenet_context_size() */
 static treenet_t *g_node_storage;
 
 void treenet_setup(void)
@@ -128,11 +121,14 @@ void treenet_setup(void)
 
 ### Размер контекста
 
-`treenet_context_size()` возвращает точный размер во время выполнения. Для
-статического буфера либо используйте заведомо достаточный размер (например,
-4096 байт) и передайте его в `treenet_init`, либо получите размер один раз и
-распечатайте при портировании. Размер зависит от значений в `config.h`
-(таблицы соседей, маршрутов, MTU и т. д.).
+`treenet_context_size()` возвращает точный размер во время выполнения. При
+конфигурации по умолчанию это около 11.4 КБ (измерено: 11360 байт на 64-битном
+хосте), и размер растёт с таблицей соседей, таблицей маршрутов, приёмным
+кольцом и слотами реассемблинга. Для статического буфера либо используйте
+заведомо достаточный размер (например, 16384 байта) и передайте его в
+`treenet_init`, либо получите размер один раз при портировании и зафиксируйте
+макросом. Контекст должен жить всё время работы узла и быть выровнен минимум
+по 8 байт.
 
 ## 6. Главный цикл и энергосбережение
 

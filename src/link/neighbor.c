@@ -141,19 +141,3 @@ void tn_neighbor_note_beacon(tn_neighbor_table_t *tbl, treenet_addr_t addr,
     tn_ewma16_push(&n->snr, snr_db);
     tn_neighbor_update_cost(n);
 }
-
-uint32_t tn_neighbor_age(tn_neighbor_table_t *tbl, uint32_t now,
-                         uint32_t timeout_ms)
-{
-    uint32_t removed = 0;
-    for (size_t i = 0; i < TREENET_MAX_NEIGHBORS; i++) {
-        tn_neighbor_t *n = &tbl->entries[i];
-        if (!n->valid) continue;
-        if (tn_elapsed(n->last_seen_ms, now) > timeout_ms) {
-            memset(n, 0, sizeof(*n));
-            if (tbl->count > 0) tbl->count--;
-            removed++;
-        }
-    }
-    return removed;
-}

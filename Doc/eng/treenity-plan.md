@@ -48,7 +48,7 @@ Contiki-NG NETSTACK, Semtech AN1200.13 (time-on-air).
 Layers (bottom-up): **PORT → Core → MAC → Link → Routing → API**.
 
 - **PORT** (`include/treenet/port.h`) — implemented by the user: `tx`, `now_ms`,
-  `rnd` are mandatory; `channel_free`, `set_radio`, `log`, `timer_arm` are
+  `rnd` are mandatory; `channel_free`, `log`, `timer_arm` are
   optional. Receive — `treenet_rx(buf,len,rssi,snr)`.
 - **Core** (`src/core`): receive ring buffer, timers, EWMA, utilities, context.
 - **MAC** (`src/mac`): frame codec, CRC, dup-cache, CSMA/CA, fragmentation,
@@ -126,7 +126,7 @@ Details in [architecture.md](architecture.md) and [protocol.md](protocol.md).
 
 ## 6. Verification (current)
 
-- **1904 checks**, 0 failures (`make test`, `ctest`).
+- **1918 checks**, 0 failures (`make test`, `ctest`).
 - Scenarios: network formation, rank ordering, unicast down/up, broadcast,
   seamless reconfiguration on relay failure, beacon interval reset on
   re-parenting, tolerance to bit errors, neighbour metrics.

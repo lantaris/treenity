@@ -63,7 +63,7 @@ void tn_beacon_send(treenet_t *t, uint32_t now)
     f.payload_len = TN_BEACON_PAYLOAD_LEN;
 
     if (tn_tx_submit(t, &f, false, TREENET_ADDR_BROADCAST, 0) == 0) {
-        t->stats.beacons_tx++;
+        TN_STAT_INC(t, beacons_tx);
     }
 
     /* Grow the interval, capped at the maximum. */

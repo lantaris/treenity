@@ -62,6 +62,10 @@ extern "C" {
 /** Total per-frame overhead: header plus optional CRC trailer. */
 #define TN_FRAME_OVERHEAD (TN_FRAME_HDR + TN_FRAME_TRAILER)
 
+#if TREENET_MTU <= TN_FRAME_OVERHEAD
+#error "TREENET_MTU must exceed the frame overhead (header + CRC trailer)"
+#endif
+
 /* Header flag bits. */
 #define TN_FLAG_WANT_ACK 0x01u /**< sender requests a hop-by-hop ACK */
 #define TN_FLAG_FLOOD    0x02u /**< frame is being flooded (broadcast) */
@@ -189,7 +193,7 @@ size_t tn_frame_encode(uint8_t *buf, size_t cap, const tn_frame_t *frame);
  */
 bool tn_frame_decode(const uint8_t *buf, size_t len, tn_frame_t *out);
 
-/** @brief Serialise a beacon payload into @p out (needs 7 bytes). */
+/** @brief Serialise a beacon payload into @p out (needs TN_BEACON_PAYLOAD_LEN bytes). */
 void tn_beacon_encode(uint8_t *out, const tn_beacon_payload_t *b);
 
 /** @brief Parse a beacon payload. @return true on success. */

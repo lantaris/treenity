@@ -24,7 +24,9 @@ Conventions:
   buffer for `treenet_init`.
 - **Parameters:** none.
 - **Returns:** size in bytes (depends on the `config.h` settings).
-- **Example:** `static uint8_t ctx[512]; /* >= treenet_context_size() */`
+- **Example:** `static uint8_t ctx[16384]; /* >= treenet_context_size() */`
+  The default configuration needs about 11.4 KB; the exact value depends on
+  `config.h` and is returned by `treenet_context_size()`.
 
 ### `treenet_t *treenet_init(void *storage, size_t storage_size, const treenet_config_t *cfg, const treenet_port_t *port)`
 
@@ -91,6 +93,9 @@ Conventions:
   - `-2` — does not fit and fragmentation is impossible (too many fragments or
     disabled);
   - `-3` — no route to `dst`.
+- **Notes:** a datagram larger than the MTU is fragmented; if the transmit queue
+  cannot hold **all** fragments the whole send is refused with `-1` (a partially
+  queued datagram could never be reassembled).
 
 ### `int treenet_broadcast(treenet_t *t, const void *data, size_t len)`
 
@@ -235,7 +240,7 @@ a parent.
 ## 7. Port (brief)
 
 Mandatory port functions: `tx`, `now_ms`, `rnd`. Optional: `channel_free`,
-`set_radio`, `log`, `timer_arm`. Details in
+`log`, `timer_arm`. Details in
 [porting.md](porting.md).
 
 ---

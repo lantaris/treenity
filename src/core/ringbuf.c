@@ -88,7 +88,7 @@ bool tn_ringbuf_push(tn_ringbuf_t *rb, const tn_rx_meta_t *meta,
     ring_write_at(rb, tail + TN_RX_HDR, data, (uint32_t)meta->len);
 
     /* Publish the record only after its bytes are in place. */
-    TN_BARRIER();
+    TN_PUBLISH();
     rb->tail = tail + need;
     return true;
 }
@@ -109,7 +109,7 @@ bool tn_ringbuf_pop(tn_ringbuf_t *rb, tn_rx_meta_t *meta, uint8_t *out,
     }
 
     /* Do not read the payload before the snapshot of tail. */
-    TN_BARRIER();
+    TN_CONSUME();
 
     uint8_t hdr[TN_RX_HDR];
     ring_read_at(rb, head, hdr, TN_RX_HDR);

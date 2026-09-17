@@ -30,7 +30,7 @@
 static treenet_port_t port = { .tx = my_tx, .now_ms = my_now, .rnd = my_rnd };
 
 /* 2. Выделите статический контекст */
-static uint8_t ctx[512]; /* >= treenet_context_size() */
+static uint8_t ctx[16384]; /* >= treenet_context_size(); ~11.4 КБ по умолчанию */
 
 /* 3. Инициализируйте узел */
 static treenet_config_t cfg = { .addr = 0x1234, .role = TREENET_ROLE_NODE,

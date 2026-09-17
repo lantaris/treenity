@@ -93,14 +93,8 @@ void tn_neighbor_note_beacon(tn_neighbor_table_t *tbl, treenet_addr_t addr,
                              int16_t rssi_dbm, int8_t snr_db, uint32_t now);
 
 /**
- * @brief Age the table, removing neighbours that have not been heard for
- *        @p timeout_ms.
- * @return number of entries removed
+ * @brief Recompute ETX and the composite link cost of one neighbour.
  */
-uint32_t tn_neighbor_age(tn_neighbor_table_t *tbl, uint32_t now,
-                         uint32_t timeout_ms);
-
-/** @brief Recompute ETX and the composite link cost of one neighbour. */
 void tn_neighbor_update_cost(tn_neighbor_t *n);
 
 #ifdef __cplusplus

@@ -75,7 +75,7 @@ int tn_tx_submit(treenet_t *t, const tn_frame_t *frame, bool reliable,
         }
     }
     if (s == NULL) {
-        t->stats.frames_dropped++;
+        TN_STAT_INC(t, frames_dropped);
         return -1;
     }
 
@@ -100,6 +100,16 @@ int tn_tx_submit(treenet_t *t, const tn_frame_t *frame, bool reliable,
     uint32_t backoff = tn_rand_below(t->port.rnd(), TREENET_CW_MAX) * TREENET_SLOT_MS;
     s->next_tx_ms = t->now_ms + delay_ms + backoff;
     return 0;
+}
+
+/** @return number of currently free transmit slots. */
+static size_t tn_tx_free_slots(const treenet_t *t)
+{
+    size_t n = 0;
+    for (size_t i = 0; i < TREENET_TX_QUEUE_SIZE; i++) {
+        if (!t->tx[i].valid) n++;
+    }
+    return n;
 }
 
 /** Send a hop-by-hop acknowledgement for a received frame. */
@@ -207,11 +217,11 @@ static void tn_tx_poll(treenet_t *t)
         bool was_retry = s->attempts > 0;
         int rc = t->port.tx(s->buf, s->len);
         if (rc == 0) {
-            t->stats.frames_tx++;
+            TN_STAT_INC(t, frames_tx);
             uint32_t us = tn_airtime_estimate_us(t->has_lora ? &t->lora : NULL,
                                                  s->len);
-            t->stats.airtime_ms += (us + 999u) / 1000u;
-            if (was_retry) t->stats.retransmissions++;
+            TN_STAT_ADD(t, airtime_ms, (us + 999u) / 1000u);
+            if (was_retry) TN_STAT_INC(t, retransmissions);
         }
 
         if (s->reliable) {
@@ -256,6 +266,10 @@ static treenet_addr_t tn_route_next_hop(treenet_t *t, treenet_addr_t dst)
 #if TREENET_ENABLE_FRAGMENTATION
 /** Maximum application bytes carried by a single fragment. */
 #define TN_FRAG_CHUNK (TREENET_MTU - TN_FRAME_OVERHEAD - TN_FRAG_HDR_LEN)
+
+#if TREENET_MTU <= (TN_FRAME_OVERHEAD + TN_FRAG_HDR_LEN)
+#error "TREENET_MTU is too small for the fragmentation layer"
+#endif
 
 static tn_reasm_t *reasm_slot(treenet_t *t, treenet_addr_t src,
                               uint16_t dgram_id, uint8_t count, uint32_t now)
@@ -346,7 +360,7 @@ static void tn_reasm_input(treenet_t *t, const tn_frame_t *f, int16_t rssi,
             for (uint8_t i = 0; i < fh.count; i++) {
                 total = (uint16_t)(total + r->frag_len[i]);
             }
-            t->stats.datagrams_rx++;
+            TN_STAT_INC(t, datagrams_rx);
             if (t->cfg.on_recv != NULL) {
                 uint8_t hops = (uint8_t)(TREENET_MAX_HOPS - f->hop_limit);
                 t->cfg.on_recv(t, f->src, r->buf, total, rssi, snr, hops);
@@ -371,7 +385,7 @@ static void tn_deliver(treenet_t *t, const tn_frame_t *f, int16_t rssi,
         return;
     }
 #endif
-    t->stats.datagrams_rx++;
+    TN_STAT_INC(t, datagrams_rx);
     if (t->cfg.on_recv != NULL) {
         uint8_t hops = (uint8_t)(TREENET_MAX_HOPS - f->hop_limit);
         t->cfg.on_recv(t, f->src, f->payload, f->payload_len, rssi, snr, hops);
@@ -385,8 +399,11 @@ static void tn_handle_data(treenet_t *t, const tn_frame_t *f, int16_t rssi,
     bool want_ack = (f->flags & TN_FLAG_WANT_ACK) != 0;
 
     if (f->dst == t->addr) {
+        /* A reliable frame may be retransmitted when its ACK was lost. Suppress
+         * the duplicate delivery, but always re-ACK so the sender stops. */
+        bool dup = tn_dupcache_seen(&t->dup, f->src, f->seq, now);
         if (want_ack) tn_send_ack(t, f->prev, f->seq);
-        tn_deliver(t, f, rssi, snr);
+        if (!dup) tn_deliver(t, f, rssi, snr);
         return;
     }
 
@@ -401,13 +418,13 @@ static void tn_handle_data(treenet_t *t, const tn_frame_t *f, int16_t rssi,
         return;
     }
     if (f->hop_limit <= 1) {
-        t->stats.frames_dropped++;
+        TN_STAT_INC(t, frames_dropped);
         return;
     }
 
     treenet_addr_t nh = tn_route_next_hop(t, f->dst);
     if (nh == TREENET_ADDR_INVALID) {
-        t->stats.frames_dropped++;
+        TN_STAT_INC(t, frames_dropped);
         return;
     }
 
@@ -468,7 +485,7 @@ void tn_process_frame(treenet_t *t, const tn_frame_t *f, int16_t rssi,
     case TREENET_FRAME_BEACON: {
         tn_beacon_payload_t b;
         if (!tn_beacon_decode(f->payload, f->payload_len, &b)) {
-            t->stats.frames_dropped++;
+            TN_STAT_INC(t, frames_dropped);
             break;
         }
         /* Semantic sanity. A corrupted beacon must never be able to attract
@@ -482,10 +499,10 @@ void tn_process_frame(treenet_t *t, const tn_frame_t *f, int16_t rssi,
         bool bad_rank = ((b.flags & TN_BEACON_HAS_PARENT) != 0) &&
                         (b.rank >= TREENET_RANK_INFINITE);
         if (bad_interval || bad_parent || bad_rank) {
-            t->stats.frames_dropped++;
+            TN_STAT_INC(t, frames_dropped);
             break;
         }
-        t->stats.beacons_rx++;
+        TN_STAT_INC(t, beacons_rx);
         tn_routing_on_beacon(t, f->src, b.rank, b.parent, b.flags,
                              b.interval_100ms, rssi, snr, now);
         break;
@@ -514,7 +531,7 @@ void tn_process_frame(treenet_t *t, const tn_frame_t *f, int16_t rssi,
         tn_handle_flood(t, f, rssi, snr, now);
         break;
     default:
-        t->stats.frames_dropped++;
+        TN_STAT_INC(t, frames_dropped);
         break;
     }
 }
@@ -529,11 +546,11 @@ static void tn_rx_drain(treenet_t *t)
     uint8_t buf[TREENET_MTU];
 
     while (tn_ringbuf_pop(&t->rx, &meta, buf, sizeof(buf))) {
-        t->stats.frames_rx++;
+        TN_STAT_INC(t, frames_rx);
 
         tn_frame_t f;
         if (!tn_frame_decode(buf, meta.len, &f)) {
-            t->stats.frames_dropped++;
+            TN_STAT_INC(t, frames_dropped);
             continue;
         }
         if (f.net_id != t->net_id || f.src == t->addr) {
@@ -592,6 +609,8 @@ static void tn_expire_reasm(treenet_t *t)
             r->valid = false;
         }
     }
+#else
+    (void)t;
 #endif
 }
 
@@ -638,10 +657,20 @@ treenet_t *treenet_init(void *storage, size_t storage_size,
 {
     if (storage == NULL || cfg == NULL || port == NULL) return NULL;
     if (storage_size < sizeof(treenet_t)) return NULL;
+    if (((uintptr_t)storage & 7u) != 0u) return NULL; /* must be 8-byte aligned */
     if (port->tx == NULL || port->now_ms == NULL || port->rnd == NULL) return NULL;
     if (cfg->addr == TREENET_ADDR_INVALID ||
         cfg->addr == TREENET_ADDR_BROADCAST) {
         return NULL;
+    }
+    switch (cfg->role) {
+    case TREENET_ROLE_NODE:
+    case TREENET_ROLE_MASTER:
+    case TREENET_ROLE_REPEATER:
+    case TREENET_ROLE_LEAF:
+        break;
+    default:
+        return NULL; /* unknown role */
     }
 
     treenet_t *t = (treenet_t *)storage;
@@ -883,7 +912,7 @@ static int tn_send_datagram(treenet_t *t, treenet_addr_t dst,
         f.payload_len = len;
 
         int rc = tn_tx_submit(t, &f, reliable, nh, 0);
-        if (rc == 0) t->stats.datagrams_tx++;
+        if (rc == 0) TN_STAT_INC(t, datagrams_tx);
         return rc;
     }
 
@@ -892,6 +921,11 @@ static int tn_send_datagram(treenet_t *t, treenet_addr_t dst,
     const size_t chunk = TN_FRAG_CHUNK;
     size_t count = (len + chunk - 1u) / chunk;
     if (count > TREENET_MAX_FRAGMENTS) return -2;
+    /* All fragments must be queued together: a partially queued datagram can
+     * never be reassembled, so refuse the whole send when the transmit queue
+     * is too small. In the single-threaded poll context the free count cannot
+     * change between this check and the submissions below. */
+    if (tn_tx_free_slots(t) < count) return -1;
 
     uint16_t dgram_id = tn_next_seq(t);
     for (size_t i = 0; i < count; i++) {
@@ -920,9 +954,11 @@ static int tn_send_datagram(treenet_t *t, treenet_addr_t dst,
         f.payload = buf;
         f.payload_len = TN_FRAG_HDR_LEN + cl;
 
-        (void)tn_tx_submit(t, &f, reliable, nh, 0);
+        if (tn_tx_submit(t, &f, reliable, nh, 0) != 0) {
+            return -1; /* cannot happen after the capacity pre-check */
+        }
     }
-    t->stats.datagrams_tx++;
+    TN_STAT_INC(t, datagrams_tx);
     return 0;
 #else
     return -2; /* too large and fragmentation disabled */
