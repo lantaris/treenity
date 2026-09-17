@@ -1,0 +1,17 @@
+# Normalise line endings in the repository. Source and documentation are
+# stored with LF so the tree is identical on Windows, Linux and macOS.
+* text=auto eol=lf
+
+# Explicit text types
+*.c    text
+*.h    text
+*.md   text
+*.txt  text
+Makefile    text
+CMakeLists.txt text
+
+# Binary types
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.pdf  binary
