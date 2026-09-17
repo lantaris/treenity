@@ -255,8 +255,9 @@ TREENET_BEACON_MAX_MS  <  TREENET_PARENT_TIMEOUT_MS  <  TREENET_NEIGHBOR_TIMEOUT
 
 ## Лицензия
 
-Лицензия проекта пока не определена. До публикации добавьте файл `LICENSE` и
-укажите тип лицензии в этом разделе.
+Проект распространяется под лицензией MIT. См. [LICENSE](LICENSE).
+
+Copyright (c) 2026 lantaris.
 
 ## Вклад
 

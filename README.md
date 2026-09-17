@@ -255,8 +255,9 @@ Full index: [Doc/eng/README.md](Doc/eng/README.md) (English) and
 
 ## License
 
-The project license is not decided yet. Before publishing, add a `LICENSE` file
-and state the license type in this section.
+Released under the MIT License. See [LICENSE](LICENSE).
+
+Copyright (c) 2026 lantaris.
 
 ## Contributing
 
