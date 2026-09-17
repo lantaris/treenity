@@ -43,6 +43,41 @@ static void treenet_task(void *arg)
 копирует). Если ISR может прервать работу задачи, задайте
 `critical_enter/exit` (например, `taskENTER_CRITICAL`/`taskEXIT_CRITICAL`).
 
+## 2.1. Tickless (энергосбережение)
+
+Реализуйте `port.timer_arm` (см. porting.md) — и MCU будет спать до ближайшего
+дедлайна библиотеки, а не просыпаться по фиксированному периоду. Приём радио —
+отдельный источник пробуждения.
+
+```c
+static void my_timer_arm(uint32_t delay_ms)
+{
+    if (delay_ms == UINT32_MAX) return;   /* задач нет — не взводим */
+    if (delay_ms == 0) delay_ms = 1;      /* назрело — опросить сразу */
+    rtc_alarm_arm_ms(delay_ms);           /* one-shot */
+}
+
+/* Пробуждение по таймеру библиотеки. */
+void rtc_alarm_isr(void) { wake_main_loop(); }
+
+/* Пробуждение по радио (DIO): принять кадр и передать в библиотеку. */
+void radio_dio_isr(void)
+{
+    radio_read_frame(&buf, &len, &rssi, &snr);
+    treenet_rx(g_node, buf, len, rssi, snr);
+    wake_main_loop();
+}
+
+/* Главный цикл: */
+for (;;) {
+    treenet_poll(g_node);   /* в конце перевзведёт timer_arm */
+    enter_sleep();          /* STOP, пока не разбудит таймер или DIO */
+}
+```
+
+Если `timer_arm` не реализован (`NULL`), используйте вариант с периодическим
+опросом из раздела 1.
+
 ## 3. Приём данных
 
 ```c

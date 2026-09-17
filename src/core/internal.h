@@ -118,6 +118,7 @@ struct treenet {
     bool           connected;       /**< a path to the Master exists */
     bool           joined;          /**< emitted JOINED at least once */
     uint32_t       dao_last_ms;     /**< last DAO transmission */
+    uint32_t       probe_last_ms;   /**< last PROBE transmission (parent search) */
 
     tn_neighbor_table_t neighbors;  /**< direct neighbours */
     tn_route_table_t    routes;     /**< downward routes (storing mode) */
@@ -136,7 +137,6 @@ struct treenet {
 
     /* --- timers --- */
     tn_timer_t beacon_timer;  /**< next beacon (Trickle) */
-    tn_timer_t route_timer;   /**< periodic DAO refresh + route expiry */
 
     /* --- Trickle state --- */
     uint32_t trickle_I;       /**< current beacon interval */

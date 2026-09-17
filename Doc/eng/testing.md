@@ -64,6 +64,9 @@ On the simulator:
 - **seamless reconfiguration**: a relay fails → the node switches to another
   parent and stays connected;
 - **beacon interval reset on re-parenting** (fast reconvergence);
+- **tickless scheduling** (`timer_arm`): idle deadline exceeds 5 s (no fixed
+  tick), a queued transmission is accounted for, and a node without a parent is
+  bounded by the PROBE interval;
 - neighbour metrics (RSSI/SNR/cost/parent).
 
 ### Corruption tests (`tests/unit/test_corrupt.c`)

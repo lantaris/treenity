@@ -197,6 +197,70 @@ static void test_beacon_reset_on_reparent(void)
     sim_destroy(s);
 }
 
+static void test_timer_arm_idle(void)
+{
+    /* Tickless scheduling: in a stable network the wake timer is bounded by
+     * the beacon interval, not by a fixed 5 s maintenance tick. */
+    sim_t *s = make_chain(2);
+    sim_run(s, 120000);
+
+    sim_node_t *n = sim_find(s, 2);
+    CHECK(n->timer_arm_count > 0);
+    CHECK(n->last_timer_arm <= TREENET_BEACON_MAX_MS);
+    CHECK(n->max_timer_arm > 5000); /* no artificial 5 s cap */
+
+    sim_destroy(s);
+}
+
+static void test_timer_arm_disconnected(void)
+{
+    /* A lone node with no Master keeps searching: the PROBE interval bounds
+     * the wake timer. */
+    sim_t *s = sim_create(3u, SIM_TX_POWER, SIM_SENSITIVITY, SIM_NOISE);
+    sim_set_path_loss(s, SIM_REF_LOSS, SIM_EXPONENT);
+    sim_set_range(s, SIM_RANGE);
+    sim_add_node(s, 1, TREENET_ROLE_NODE, 0.0, 0.0, false);
+    sim_run(s, 30000);
+
+    sim_node_t *n = sim_find(s, 1);
+    CHECK(!treenet_is_connected(n->net));
+    CHECK(n->timer_arm_count > 0);
+    CHECK(n->last_timer_arm <= TREENET_PROBE_INTERVAL_MS);
+
+    sim_destroy(s);
+}
+
+static void test_timer_arm_tx(void)
+{
+    /* A queued / ACK-awaiting frame must be reflected in the wake deadline. */
+    sim_t *s = sim_create(5u, SIM_TX_POWER, SIM_SENSITIVITY, SIM_NOISE);
+    sim_set_path_loss(s, SIM_REF_LOSS, SIM_EXPONENT);
+    sim_set_range(s, SIM_RANGE);
+    sim_add_node(s, 1, TREENET_ROLE_MASTER, 0.0, 0.0, true);
+    sim_add_node(s, 2, TREENET_ROLE_NODE, 100.0, 0.0, true); /* reliable */
+    sim_run(s, 60000);
+
+    sim_node_t *n = sim_find(s, 2);
+    uint8_t msg = 0x42;
+    CHECK_EQ(treenet_send(n->net, 1, &msg, 1), 0);
+    sim_run(s, 10); /* one poll recomputes the deadline */
+
+    uint32_t now = n->net->now_ms;
+    uint32_t tx_rem = UINT32_MAX;
+    for (size_t i = 0; i < TREENET_TX_QUEUE_SIZE; i++) {
+        if (!n->net->tx[i].valid) continue;
+        uint32_t due = n->net->tx[i].next_tx_ms;
+        uint32_t rem = tn_time_after(now, due) ? 0u : (due - now);
+        if (rem < tx_rem) tx_rem = rem;
+    }
+    CHECK(tx_rem != UINT32_MAX);
+    if (tx_rem != UINT32_MAX) {
+        CHECK(n->last_timer_arm <= tx_rem);
+    }
+
+    sim_destroy(s);
+}
+
 static void test_bit_errors_tolerated(void)
 {
     /* A noisy channel: the CRC rejects corrupted frames, so the mesh sees
@@ -255,6 +319,9 @@ void run_mesh_tests(void)
     RUN_TEST(test_broadcast_reaches_all);
     RUN_TEST(test_seamless_reparenting);
     RUN_TEST(test_beacon_reset_on_reparent);
+    RUN_TEST(test_timer_arm_idle);
+    RUN_TEST(test_timer_arm_disconnected);
+    RUN_TEST(test_timer_arm_tx);
     RUN_TEST(test_bit_errors_tolerated);
     RUN_TEST(test_neighbor_metrics);
 }

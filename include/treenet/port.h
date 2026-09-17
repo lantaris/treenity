@@ -93,6 +93,26 @@ typedef void (*treenet_critical_fn)(void);
 typedef void (*treenet_log_fn)(int level, const char *msg);
 
 /**
+ * @brief Optional wake-timer hook for tickless low-power idle.
+ *
+ * treenet_poll() calls this at the end of every poll to tell the port when it
+ * next needs attention. The port should arm (or re-arm, replacing any pending
+ * value) a one-shot timer that fires after @p delay_ms and then calls
+ * treenet_poll() again.
+ *
+ * Semantics:
+ *  - the call is a set/replace, not an additional arm;
+ *  - @p delay_ms == 0 means work is already due: poll again as soon as possible
+ *    (clamp to a small non-zero value if the timer cannot do 0);
+ *  - @p delay_ms == UINT32_MAX means nothing is scheduled: do not arm.
+ *
+ * This hook only covers the library's deadlines. Received frames must still
+ * wake the application independently (e.g. the modem's DIO interrupt calling
+ * treenet_rx()); the port must then call treenet_poll() as usual.
+ */
+typedef void (*treenet_timer_arm_fn)(uint32_t delay_ms);
+
+/**
  * @brief Port descriptor.
  *
  * The first three members are mandatory. Zero-initialise the structure and
@@ -108,6 +128,7 @@ typedef struct {
     treenet_critical_fn     critical_enter;/**< optional: IRQ disable */
     treenet_critical_fn     critical_exit; /**< optional: IRQ enable */
     treenet_log_fn          log;           /**< optional: log sink */
+    treenet_timer_arm_fn    timer_arm;     /**< optional: tickless wake timer */
 } treenet_port_t;
 
 #ifdef __cplusplus

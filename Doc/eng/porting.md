@@ -44,6 +44,7 @@ only backoff jitter and beacon scheduling use it.
 | `set_radio(cfg)` | change SF/BW/power | changes are ignored |
 | `critical_enter()/exit()` | protect the receive ring buffer | no protection |
 | `log(level,msg)` | diagnostics output | logging disabled |
+| `timer_arm(delay_ms)` | arm the wake timer (tickless) | you call `treenet_poll()` yourself |
 
 ## 3. Receive: ISR -> `treenet_rx`
 
@@ -136,8 +137,12 @@ pass it to `treenet_init`, or obtain the size once and print it while porting.
 The size depends on the values in `config.h` (neighbour table, route table, MTU
 and so on).
 
-## 6. Main loop
+## 6. Main loop and power saving
 
+The library is **non-blocking** and uses no hardware timers. Two ways to "tick"
+it:
+
+**A. Periodic polling (simple, no power saving):**
 ```c
 for (;;) {
     treenet_poll(g_node);   /* call every 10..100 ms */
@@ -145,7 +150,35 @@ for (;;) {
 }
 ```
 
-Do not call `treenet_poll` from an interrupt.
+**B. Tickless (recommended for battery nodes):** implement
+`port.timer_arm(delay_ms)`. At the end of every `treenet_poll()` the library
+calls it with the time until its nearest deadline (beacon, maintenance,
+transmission/ACK, parent liveness). Arm a **one-shot** timer and call
+`treenet_poll()` again when it fires.
+
+```c
+static void my_timer_arm(uint32_t delay_ms)
+{
+    if (delay_ms == UINT32_MAX) return;      /* nothing scheduled: don't arm */
+    if (delay_ms == 0) delay_ms = 1;         /* due now: poll again immediately */
+    rtc_alarm_arm_ms(delay_ms);              /* your RTC/timer */
+}
+```
+On timer expiry: `treenet_poll(g_node);`
+
+Important:
+- `timer_arm` is a **set/replace**, not an additional arm: the previous value is
+  overwritten.
+- **Radio reception is a separate wake source.** The timer only covers the
+  library's deadlines. The modem's DIO interrupt must wake the MCU and call
+  `treenet_rx(...)`, followed by `treenet_poll()`.
+- `now_ms` must keep running during sleep (RTC counter), otherwise the deadlines
+  freeze.
+- If `timer_arm == NULL` the library behaves as before — you poll it yourself
+  (option A).
+
+Do not call `treenet_poll` from an interrupt (the only ISR-safe function is
+`treenet_rx`).
 
 ## 7. Integrity check
 

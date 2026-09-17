@@ -53,6 +53,8 @@ every received packet.
   frames are dropped before processing and never change network state.
 - **Fragmentation** of datagrams larger than the MTU.
 - **Time-on-air accounting** using the Semtech AN1200.13 formula.
+- **Tickless scheduling.** An optional `port.timer_arm()` tells the application
+  when to wake the MCU; periodic processes are expressed as computed deadlines.
 - **Desktop simulator** with reproducible scenarios and metric collection.
 
 ## Architecture
@@ -201,7 +203,7 @@ treenity/
 ## Testing
 
 ```sh
-make test          # unit + scenario tests (1862 checks)
+make test          # unit + scenario tests (1871 checks)
 make fuzz          # fuzzing, 200000 iterations
 ```
 

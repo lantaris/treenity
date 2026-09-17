@@ -72,6 +72,11 @@ and never use dynamic memory.
   ~49 day wrap is handled correctly.
 - Timers (`tn_timer_t`) do not use interrupts: they are evaluated inside
   `treenet_poll()`.
+- **Tickless.** Periodic processes (route expiry, neighbour ageing, reassembly
+  cleanup, DAO refresh, PROBE) are not driven by a fixed tick but by **computed
+  deadlines**. At the end of every `treenet_poll()` the library reports the
+  nearest deadline to the port through the optional `port.timer_arm(delay_ms)`,
+  so the MCU can sleep until it is actually needed.
 
 ## 5. Threading and ISR model
 

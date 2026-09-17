@@ -529,7 +529,7 @@ static void tn_expire_reasm(treenet_t *t)
     for (size_t i = 0; i < TREENET_REASSEMBLY_SLOTS; i++) {
         tn_reasm_t *r = &t->reasm[i];
         if (r->valid &&
-            tn_elapsed(r->last_ms, t->now_ms) > TREENET_ACK_TIMEOUT_MS * 4u) {
+            tn_elapsed(r->last_ms, t->now_ms) > TREENET_REASM_TIMEOUT_MS) {
             r->valid = false;
         }
     }
@@ -548,6 +548,9 @@ static void tn_probe_send(treenet_t *t)
     f.net_id = t->net_id;
     f.hop_limit = 1;
     (void)tn_tx_submit(t, &f, false, TREENET_ADDR_BROADCAST, 0);
+    /* Rate-limit probes on the attempt, not on success, so a momentarily full
+     * transmit queue cannot pin the next deadline at zero. */
+    t->probe_last_ms = t->now_ms;
 }
 
 static void tn_events_flush(treenet_t *t)
@@ -621,7 +624,6 @@ treenet_t *treenet_init(void *storage, size_t storage_size,
      * freshly powered group does not beacon in lockstep. */
     tn_timer_start(&t->beacon_timer, t->now_ms,
                    tn_rand_below(port->rnd(), TREENET_BEACON_MIN_MS));
-    tn_timer_start_periodic(&t->route_timer, t->now_ms, 5000u);
 
     t->initialized = true;
 
@@ -633,6 +635,95 @@ treenet_t *treenet_init(void *storage, size_t storage_size,
     }
 
     return t;
+}
+
+/* ========================================================================= */
+/* Tickless deadline computation                                              */
+/* ========================================================================= */
+
+/** Remaining milliseconds until @p due, 0 if already due (wrap-safe). */
+static uint32_t deadline_in(uint32_t due, uint32_t now)
+{
+    return tn_time_after(now, due) ? 0u : (uint32_t)(due - now);
+}
+
+/**
+ * @brief Earliest maintenance deadline.
+ *
+ * Covers route expiry, neighbour ageing, reassembly cleanup, DAO refresh and
+ * the parent-search PROBE. All periodic housekeeping is expressed this way
+ * instead of a fixed tick, so the node can sleep until the next action is
+ * actually due.
+ *
+ * @return milliseconds until the next maintenance action (0 if due now)
+ */
+static uint32_t next_maint_deadline(const treenet_t *t, uint32_t now)
+{
+    uint32_t best = UINT32_MAX;
+
+    for (size_t i = 0; i < TREENET_MAX_ROUTES; i++) {
+        const tn_route_t *r = &t->routes.entries[i];
+        if (!r->valid) continue;
+        uint32_t d = deadline_in(r->updated_ms + TREENET_ROUTE_TIMEOUT_MS, now);
+        if (d < best) best = d;
+    }
+    for (size_t i = 0; i < TREENET_MAX_NEIGHBORS; i++) {
+        const tn_neighbor_t *n = &t->neighbors.entries[i];
+        if (!n->valid) continue;
+        uint32_t d = deadline_in(n->last_seen_ms + TREENET_NEIGHBOR_TIMEOUT_MS,
+                                 now);
+        if (d < best) best = d;
+    }
+    for (size_t i = 0; i < TREENET_REASSEMBLY_SLOTS; i++) {
+        const tn_reasm_t *r = &t->reasm[i];
+        if (!r->valid) continue;
+        uint32_t d = deadline_in(r->last_ms + TREENET_REASM_TIMEOUT_MS, now);
+        if (d < best) best = d;
+    }
+
+    if (t->role != TREENET_ROLE_MASTER) {
+        if (!t->connected) {
+            uint32_t d = deadline_in(t->probe_last_ms + TREENET_PROBE_INTERVAL_MS,
+                                     now);
+            if (d < best) best = d;
+        } else {
+            uint32_t d = deadline_in(t->dao_last_ms + TREENET_ROUTE_REFRESH_MS,
+                                     now);
+            if (d < best) best = d;
+        }
+    }
+    return best;
+}
+
+/**
+ * @brief Earliest deadline of any kind.
+ *
+ * Combines beacons, maintenance, queued transmissions (including ACK
+ * retransmissions) and parent liveness. treenet_poll() arms the port's wake
+ * timer with this value at the end of every poll.
+ *
+ * @return milliseconds until treenet_poll() next has work (0 if due now,
+ *         UINT32_MAX if nothing is scheduled)
+ */
+static uint32_t next_deadline_ms(const treenet_t *t, uint32_t now)
+{
+    uint32_t best = tn_timer_remaining(&t->beacon_timer, now);
+
+    uint32_t d = next_maint_deadline(t, now);
+    if (d < best) best = d;
+
+    for (size_t i = 0; i < TREENET_TX_QUEUE_SIZE; i++) {
+        const tn_tx_slot_t *s = &t->tx[i];
+        if (!s->valid) continue;
+        d = deadline_in(s->next_tx_ms, now);
+        if (d < best) best = d;
+    }
+
+    if (t->role != TREENET_ROLE_MASTER && t->parent != TREENET_ADDR_INVALID) {
+        d = deadline_in(t->parent_beacon_ms + TREENET_PARENT_TIMEOUT_MS, now);
+        if (d < best) best = d;
+    }
+    return best;
 }
 
 void treenet_poll(treenet_t *t)
@@ -648,17 +739,21 @@ void treenet_poll(treenet_t *t)
     tn_beacon_tick(t, t->now_ms);
     tn_routing_tick(t, t->now_ms);
 
-    /* 3. Periodic maintenance. */
-    if (tn_timer_fire(&t->route_timer, t->now_ms)) {
+    /* 3. Maintenance, only when something is actually due. Each task also
+     *    self-checks its own timeout, so running the block early is harmless. */
+    if (next_maint_deadline(t, t->now_ms) == 0u) {
         tn_route_expire(&t->routes, t->now_ms, TREENET_ROUTE_TIMEOUT_MS);
         tn_age_neighbors(t);
         tn_expire_reasm(t);
 
         if (t->role != TREENET_ROLE_MASTER) {
             if (!t->connected) {
-                tn_probe_send(t); /* keep soliciting until we find a parent */
-            } else if (tn_elapsed(t->dao_last_ms, t->now_ms) >
-                       TREENET_ROUTE_REFRESH_MS) {
+                if (deadline_in(t->probe_last_ms + TREENET_PROBE_INTERVAL_MS,
+                                t->now_ms) == 0u) {
+                    tn_probe_send(t); /* keep soliciting until a parent is found */
+                }
+            } else if (deadline_in(t->dao_last_ms + TREENET_ROUTE_REFRESH_MS,
+                                   t->now_ms) == 0u) {
                 tn_dao_send(t, t->now_ms);
             }
         }
@@ -669,6 +764,11 @@ void treenet_poll(treenet_t *t)
 
     /* 5. Deliver events last, so the application sees a settled state. */
     tn_events_flush(t);
+
+    /* 6. Arm the port's wake timer for the next deadline (tickless). */
+    if (t->port.timer_arm != NULL) {
+        t->port.timer_arm(next_deadline_ms(t, t->now_ms));
+    }
 }
 
 int treenet_rx(treenet_t *t, const uint8_t *buf, size_t len,

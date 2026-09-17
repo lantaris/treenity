@@ -52,6 +52,9 @@ typedef struct {
     uint32_t last_len;       /**< length of the last delivered datagram */
     int16_t  last_rssi;      /**< RSSI of the last delivered datagram */
     int8_t   last_snr;       /**< SNR of the last delivered datagram */
+    uint32_t last_timer_arm; /**< last delay requested via port.timer_arm */
+    uint32_t max_timer_arm;  /**< largest delay ever requested via timer_arm */
+    uint32_t timer_arm_count;/**< number of port.timer_arm calls */
 } sim_node_t;
 
 /**

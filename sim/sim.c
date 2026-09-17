@@ -108,6 +108,18 @@ static bool sim_channel_free_cb(void)
     return true; /* collisions are resolved by the channel, not by CAD */
 }
 
+static void sim_timer_arm_cb(uint32_t delay_ms)
+{
+    sim_t *s = g_sim;
+    if (s == NULL || g_current < 0) return;
+    sim_node_t *n = &s->nodes[g_current];
+    n->last_timer_arm = delay_ms;
+    if (delay_ms != UINT32_MAX && delay_ms > n->max_timer_arm) {
+        n->max_timer_arm = delay_ms;
+    }
+    n->timer_arm_count++;
+}
+
 static void sim_on_recv(treenet_t *t, treenet_addr_t src, const uint8_t *data,
                         size_t len, int16_t rssi, int8_t snr, uint8_t hops)
 {
@@ -326,6 +338,7 @@ sim_node_t *sim_add_node(sim_t *s, treenet_addr_t addr, treenet_role_t role,
     port.now_ms = sim_now_cb;
     port.rnd = sim_rnd_cb;
     port.channel_free = sim_channel_free_cb;
+    port.timer_arm = sim_timer_arm_cb;
 
     n->net = treenet_init(ctx, treenet_context_size(), &cfg, &port);
     if (n->net == NULL) {

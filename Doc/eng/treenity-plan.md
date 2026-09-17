@@ -111,12 +111,16 @@ Details in [architecture.md](architecture.md) and [protocol.md](protocol.md).
 9. **Fragmentation/reassembly** of datagrams > MTU.
 10. **Integrity check** — CRC-16/CCITT-FALSE (frame trailer, enabled by
     default); semantic frame validation; a corrupted frame never changes state.
+11. **Tickless scheduling** — periodic processes (route expiry, neighbour
+    ageing, reassembly, DAO refresh, PROBE) are expressed as computed deadlines;
+    at the end of `treenet_poll()` the port receives the nearest deadline via
+    `port.timer_arm()` so the MCU can sleep.
 
 ---
 
 ## 6. Verification (current)
 
-- **1862 checks**, 0 failures (`make test`, `ctest`).
+- **1871 checks**, 0 failures (`make test`, `ctest`).
 - Scenarios: network formation, rank ordering, unicast down/up, broadcast,
   seamless reconfiguration on relay failure, beacon interval reset on
   re-parenting, tolerance to bit errors, neighbour metrics.
@@ -156,6 +160,8 @@ Details in [architecture.md](architecture.md) and [protocol.md](protocol.md).
 | `TREENET_MAX_RETRIES` | 3 | transmissions of a reliable frame |
 | `TREENET_ROUTE_REFRESH_MS` | 60000 | DAO period |
 | `TREENET_ROUTE_TIMEOUT_MS` | 180000 | route lifetime |
+| `TREENET_PROBE_INTERVAL_MS` | 5000 | PROBE period while searching for a parent |
+| `TREENET_REASM_TIMEOUT_MS` | 8000 | reassembly slot lifetime |
 
 **Mandatory relation:**
 `BEACON_MAX_MS < PARENT_TIMEOUT_MS < NEIGHBOR_TIMEOUT_MS`.

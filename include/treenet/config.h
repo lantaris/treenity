@@ -183,6 +183,16 @@
 #define TREENET_DUP_TTL_MS 60000u
 #endif
 
+/** How often a disconnected node broadcasts a PROBE to find a parent. */
+#ifndef TREENET_PROBE_INTERVAL_MS
+#define TREENET_PROBE_INTERVAL_MS 5000u
+#endif
+
+/** Lifetime of a partially reassembled fragmented datagram. */
+#ifndef TREENET_REASM_TIMEOUT_MS
+#define TREENET_REASM_TIMEOUT_MS 8000u
+#endif
+
 /**
  * Contention window used when rebroadcasting a flooded frame. Nodes with a
  * weaker (lower SNR) link to the sender pick a shorter delay so the message

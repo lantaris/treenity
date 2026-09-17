@@ -6,98 +6,189 @@
 Вспомогательные: `include/treenet/types.h`, `include/treenet/port.h`,
 `include/treenet/config.h`.
 
+Соглашения:
+
+- Все функции принимают указатель на экземпляр `treenet_t *` (или `const`-версию).
+- Адрес — `treenet_addr_t` (32 бита): `TREENET_ADDR_BROADCAST` (`0xFFFFFFFF`) —
+  всем, `TREENET_ADDR_INVALID` (`0x00000000`) — «нет адреса/родителя».
+- Библиотека неблокирующая; вся работа — в `treenet_poll()`.
+
+---
+
 ## 1. Жизненный цикл
 
 ### `size_t treenet_context_size(void)`
 
-Размер контекста в байтах. Используйте для статического буфера.
+- **Назначение:** вернуть точный размер контекста экземпляра в байтах, чтобы
+  выделить буфер под `treenet_init`.
+- **Параметры:** нет.
+- **Возвращает:** размер в байтах (зависит от настроек `config.h`).
+- **Пример:** `static uint8_t ctx[512]; /* >= treenet_context_size() */`
 
 ### `treenet_t *treenet_init(void *storage, size_t storage_size, const treenet_config_t *cfg, const treenet_port_t *port)`
 
-Инициализирует экземпляр в памяти вызывающего. Возвращает `NULL`, если:
+- **Назначение:** инициализировать экземпляр в предоставленной памяти (без
+  `malloc`), скопировать конфигурацию и порт, подготовить таблицы и таймеры.
+- **Параметры:**
+  - `storage` — буфер под контекст; должен жить всё время работы узла и быть
+    выровнен минимум по 8 байт;
+  - `storage_size` — размер буфера; должен быть `>= treenet_context_size()`;
+  - `cfg` — конфигурация узла (адрес, роль, колбэки и т. д.);
+  - `port` — таблица функций порта (HAL).
+- **Возвращает:** указатель на экземпляр `treenet_t *`, либо `NULL`, если:
+  `storage == NULL`; `storage_size` мал; `cfg`/`port == NULL`; не заданы
+  обязательные `port.tx`, `port.now_ms`, `port.rnd`; `cfg.addr` равен `0` или
+  `0xFFFFFFFF`.
+- **Примечания:** для Master сразу выставляется rank 0; обычный узел рассылает
+  `PROBE`, чтобы найти родителя.
 
-- `storage == NULL` или `storage_size < treenet_context_size()`;
-- `cfg`/`port` == `NULL`;
-- не заданы обязательные `port.tx`, `port.now_ms`, `port.rnd`;
-- `cfg.addr` равен `0` или `0xFFFFFFFF`.
+---
 
-Память должна быть выровнена минимум по 8 байт и жить всё время работы узла.
+## 2. Runtime
 
 ### `void treenet_poll(treenet_t *t)`
 
-Двигает состояние: приём, beacon-и, маршрутизация, передача, события.
-Неблокирующий. Вызывайте из главного цикла или по таймеру (10–100 мс).
+- **Назначение:** продвинуть состояние: разбор принятых кадров, beacon-и,
+  маршрутизация, обслуживание по дедлайнам, передача, доставка событий.
+  Не блокирует.
+- **Параметры:** `t` — экземпляр (`NULL` или неинициализированный — no-op).
+- **Возвращает:** ничего.
+- **Примечания:** вызывать регулярно (10–100 мс) **или** реализовать
+  `port.timer_arm` и вызывать по срабатыванию таймера (tickless). Не вызывать
+  из прерывания.
 
 ### `int treenet_rx(treenet_t *t, const uint8_t *buf, size_t len, int16_t rssi, int8_t snr)`
 
-Передать принятый кадр в библиотеку. Безопасен для вызова из ISR (только
-копирует кадр в кольцевой буфер). `rssi` (dBm) и `snr` (dB) относятся к связи с
-непосредственным отправителем. Возвращает `0` при успехе, отрицательное — если
-буфер полон или аргументы неверны.
+- **Назначение:** передать принятый из эфира кадр в библиотеку. Безопасно для
+  вызова из ISR (только копирует кадр в кольцевой буфер).
+- **Параметры:**
+  - `t` — экземпляр;
+  - `buf` — байты кадра (как принял модем);
+  - `len` — длина кадра;
+  - `rssi` — RSSI кадра в dBm (связь с **непосредственным** отправителем);
+  - `snr` — SNR кадра в dB.
+- **Возвращает:** `0` — принято в очередь; отрицательное — ошибка (`t`/`buf`
+  `NULL`, не инициализировано, `len == 0`, `len > TREENET_MTU`, буфер полон).
+- **Примечания:** `rssi`/`snr` критичны для оценки качества связи и выбора
+  родителя.
 
-## 2. Конфигурация
-
-```c
-typedef struct {
-    treenet_addr_t addr;      /* уникальный адрес узла */
-    treenet_role_t role;      /* MASTER / NODE / REPEATER */
-    uint16_t       net_id;    /* логический id сети */
-
-    void (*on_recv)(treenet_t*, treenet_addr_t src, const uint8_t *data,
-                    size_t len, int16_t rssi, int8_t snr, uint8_t hops);
-    void (*on_event)(treenet_t*, treenet_event_t ev, void *arg);
-
-    void *user;               /* произвольный указатель, возвращается в колбэках */
-    bool  reliable;           /* требовать hop-by-hop ACK для unicast */
-    treenet_radio_cfg_t radio;/* опционально: параметры LoRa для расчёта ToA */
-} treenet_config_t;
-```
-
-- `on_recv` вызывается при получении полной датаграммы; `rssi`/`snr` — качество
-  кадра, доставившего датаграмму (последний переход).
-- `on_event` — асинхронные события. Для `PARENT_CHANGED` `arg` указывает на
-  новый адрес родителя.
-- `radio.spreading_factor != 0` включает расчёт времени в эфире по LoRa-формуле.
+---
 
 ## 3. Передача данных
 
 ### `int treenet_send(treenet_t *t, treenet_addr_t dst, const void *data, size_t len)`
 
-Одноадресная отправка. Возвращает:
-
-- `0` — поставлено в очередь;
-- `-1` — неверные аргументы / не инициализировано;
-- `-2` — датаграмма больше `TREENET_MAX_DATAGRAM` при отключённой фрагментации;
-- `-3` — нет маршрута к `dst`.
+- **Назначение:** одноадресная отправка датаграммы к узлу `dst` (маршрутизация к
+  Master-дереву). Датаграммы больше MTU фрагментируются автоматически.
+- **Параметры:**
+  - `t` — экземпляр;
+  - `dst` — адрес получателя (равен broadcast → работает как `treenet_broadcast`);
+  - `data` — данные приложения;
+  - `len` — длина данных (до `TREENET_MAX_DATAGRAM`).
+- **Возвращает:**
+  - `0` — поставлено в очередь;
+  - `-1` — неверные аргументы / не инициализировано / `len == 0` /
+    `len > TREENET_MAX_DATAGRAM` / `dst` == self или invalid / очередь передачи
+    полна;
+  - `-2` — не помещается и фрагментация невозможна (слишком много фрагментов
+    или выключена);
+  - `-3` — нет маршрута к `dst`.
 
 ### `int treenet_broadcast(treenet_t *t, const void *data, size_t len)`
 
-Широковещательная рассылка через managed flooding.
+- **Назначение:** широковещательная рассылка на всю сеть через managed flooding.
+- **Параметры:** `t` — экземпляр; `data`/`len` — данные приложения.
+- **Возвращает:** `0` — в очередь; отрицательное — ошибка (те же коды, кроме
+  «нет маршрута»).
+
+---
 
 ## 4. Интроспекция
 
-| Функция | Возвращает |
+### `treenet_addr_t treenet_addr(const treenet_t *t)`
+- **Назначение:** адрес узла.
+- **Параметры:** `t`.
+- **Возвращает:** адрес или `TREENET_ADDR_INVALID`, если `t == NULL`.
+
+### `treenet_role_t treenet_role(const treenet_t *t)`
+- **Назначение:** роль узла.
+- **Возвращает:** `TREENET_ROLE_NODE` / `MASTER` / `REPEATER` (по умолчанию
+  `NODE` при `t == NULL`).
+
+### `treenet_addr_t treenet_parent(const treenet_t *t)`
+- **Назначение:** текущий родитель узла.
+- **Возвращает:** адрес родителя или `TREENET_ADDR_INVALID`, если родителя нет.
+
+### `uint16_t treenet_rank(const treenet_t *t)`
+- **Назначение:** текущий Rank (накопленная стоимость пути к Master).
+- **Возвращает:** Rank; `0` у Master; `TREENET_RANK_INFINITE` (0xFFFF), если
+  пути нет.
+
+### `bool treenet_is_connected(const treenet_t *t)`
+- **Назначение:** есть ли рабочий путь к Master.
+- **Возвращает:** `true`/`false`.
+
+### `const treenet_stats_t *treenet_stats(const treenet_t *t)`
+- **Назначение:** доступ к счётчикам для диагностики/бенчмарков.
+- **Возвращает:** указатель на блок статистики (только чтение) или `NULL`, если
+  `t == NULL`.
+
+### `size_t treenet_neighbors(const treenet_t *t, treenet_neighbor_info_t *out, size_t max)`
+- **Назначение:** снять снимок таблицы соседей с оценкой качества связи.
+- **Параметры:** `t` — экземпляр; `out` — массив для записи; `max` — его ёмкость.
+- **Возвращает:** число записанных записей (`<= max`); `0` при `t`/`out == NULL`.
+
+### `const char *treenet_version(void)`
+- **Назначение:** строка версии библиотеки.
+- **Возвращает:** статическую строку, напр. `"0.1.0"`.
+
+---
+
+## 5. Конфигурация (`treenet_config_t`)
+
+Передаётся в `treenet_init`. Обнулите структуру и заполните нужные поля.
+
+| Поле | Назначение |
 |---|---|
-| `treenet_addr(t)` | адрес узла |
-| `treenet_role(t)` | роль |
-| `treenet_parent(t)` | текущий родитель или `TREENET_ADDR_INVALID` |
-| `treenet_rank(t)` | текущий Rank |
-| `treenet_is_connected(t)` | `true`, если есть путь к Master |
-| `treenet_stats(t)` | указатель на блок статистики |
-| `treenet_neighbors(t, out, max)` | снимки соседей с LQI |
-| `treenet_version()` | строку версии |
+| `treenet_addr_t addr` | уникальный адрес узла (не `0` и не `0xFFFFFFFF`) |
+| `treenet_role_t role` | роль: `MASTER` / `NODE` / `REPEATER` |
+| `uint16_t net_id` | логический id сети; кадры с другим `net_id` игнорируются |
+| `void (*on_recv)(...)` | колбэк приёма полной датаграммы (см. ниже) |
+| `void (*on_event)(...)` | колбэк асинхронных событий (см. ниже) |
+| `void *user` | произвольный указатель приложения |
+| `bool reliable` | требовать hop-by-hop ACK для unicast |
+| `treenet_radio_cfg_t radio` | опц.: LoRa-параметры для расчёта времени в эфире |
+
+### Колбэк `on_recv`
 
 ```c
-typedef struct {
-    treenet_addr_t         addr;
-    treenet_link_quality_t lq;      /* rssi_dbm, snr_db, pdr_q8, etx_q8, link_cost */
-    uint16_t               rank;
-    uint32_t               age_ms;
-    bool                   is_parent;
-} treenet_neighbor_info_t;
+void (*on_recv)(treenet_t *t, treenet_addr_t src, const uint8_t *data,
+                size_t len, int16_t rssi, int8_t snr, uint8_t hops);
 ```
+- **Назначение:** уведомить приложение о полученной датаграмме.
+- **Параметры:** `t` — экземпляр; `src` — исходный отправитель; `data`/`len` —
+  payload; `rssi`/`snr` — качество кадра последнего перехода; `hops` — сколько
+  переходов прошла датаграмма.
+- **Возвращает:** ничего. Вызывается изнутри `treenet_poll()`.
 
-## 5. События (`treenet_event_t`)
+### Колбэк `on_event`
+
+```c
+void (*on_event)(treenet_t *t, treenet_event_t ev, void *arg);
+```
+- **Назначение:** уведомить приложение о сетевом событии.
+- **Параметры:** `t` — экземпляр; `ev` — код события; `arg` — аргумент события
+  (для `PARENT_CHANGED` — указатель на новый адрес родителя, иначе `NULL`).
+- **Возвращает:** ничего. Вызывается изнутри `treenet_poll()`.
+
+---
+
+## 6. Типы, события, статистика
+
+### Роли (`treenet_role_t`)
+`TREENET_ROLE_NODE` (0), `TREENET_ROLE_MASTER` (1), `TREENET_ROLE_REPEATER` (2).
+
+### События (`treenet_event_t`)
 
 | Событие | Когда |
 |---|---|
@@ -109,20 +200,46 @@ typedef struct {
 | `DISCONNECTED` | узел отключился от поддерева Master |
 | `TX_DONE` / `TX_FAILED` | надёжный кадр подтверждён / исчерпал попытки |
 
-## 6. Статистика (`treenet_stats_t`)
+### Статистика (`treenet_stats_t`)
 
-```c
-uint32_t frames_tx, frames_rx, frames_dropped;
-uint32_t retransmissions, beacons_tx, beacons_rx;
-uint32_t parent_changes, datagrams_tx, datagrams_rx;
-uint32_t airtime_ms;
-```
+| Поле | Значение |
+|---|---|
+| `frames_tx` | кадров отдано порту на передачу |
+| `frames_rx` | кадров принято от порта |
+| `frames_dropped` | кадров отброшено локально |
+| `retransmissions` | MAC-ретрансмиссий |
+| `beacons_tx` / `beacons_rx` | beacon-ов отправлено / принято |
+| `parent_changes` | смен родителя |
+| `datagrams_tx` / `datagrams_rx` | датаграмм принято к отправке / доставлено вверх |
+| `airtime_ms` | накопленное время в эфире (оценка) |
 
-## 7. Возвращаемые коды (сводка)
+### Качество связи (`treenet_link_quality_t`, внутри `treenet_neighbor_info_t`)
+
+| Поле | Значение |
+|---|---|
+| `rssi_dbm` | сглаженный RSSI, dBm |
+| `snr_db` | сглаженный SNR, dB |
+| `pdr_q8` | доля доставки, Q8 (256 = 100%) |
+| `etx_q8` | ETX, Q8 (256 = 1.0) |
+| `link_cost` | композитная стоимость линка |
+
+`treenet_neighbor_info_t` дополнительно: `addr`, `rank`, `age_ms`, `is_parent`.
+
+---
+
+## 7. Порт (кратко)
+
+Обязательные функции порта: `tx`, `now_ms`, `rnd`. Опциональные: `channel_free`,
+`set_radio`, `critical_enter/exit`, `log`, `timer_arm`. Подробности — в
+[porting.md](porting.md).
+
+---
+
+## 8. Возвращаемые коды (сводка)
 
 | Код | Значение |
 |---|---|
 | `0` | успех |
-| `-1` | неверные аргументы / не инициализировано |
-| `-2` | кадр/датаграмма не помещается |
+| `-1` | неверные аргументы / не инициализировано / очередь полна |
+| `-2` | не помещается / фрагментация невозможна |
 | `-3` | нет маршрута |
