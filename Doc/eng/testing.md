@@ -126,12 +126,16 @@ Two multi-threaded tests (`make stress`, not part of `ctest`):
 ### Repeater report (`tests/sim/test_repeaters.c`)
 
 Stress test: 1 Master + 30 `REPEATER` nodes in a 6x5 grid (150 m spacing, 250 m
-range, SF7). Two 180 s virtual-time scenarios:
+range, SF7). Three 180 s virtual-time scenarios:
 
 1. **Corrupted / lost frames** (BER) — per-node parent churn: number of changes,
    min/avg/max intervals, disconnection episodes.
-2. **Transit repeaters lose power** — reconnection timings of their direct
+2. **Transit repeaters lose power** (idle) — reconnection timings of their direct
    children (time until a child moves off the failed parent).
+3. **Transit repeaters lose power with active traffic** — the children keep
+   sending reliable datagrams to the master; measures the reconnection time (the
+   ACK-based fast repair kicks in) and the "blind window": how many datagrams
+   were sent, lost (`TX_FAILED`) and delivered before the reconnection.
 
 Run it with `make repeaters` (or `./build/treenet_repeaters`). It prints a
 concise report and exits with code 0.

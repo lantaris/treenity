@@ -101,6 +101,21 @@ called from an interrupt.
   index accesses; this is enforced by a compile-time check in `config.h`.
 - Call `treenet_poll()` often enough (10–100 ms) or from `timer_arm` (tickless).
 
+**Multi-threading: the caller synchronizes.** If the application calls the
+library from several threads/tasks, it serialises the **non-ISR** entry points
+with **its own mutex**:
+
+- under the mutex: `treenet_poll`, `treenet_send`, `treenet_broadcast` and
+  introspection (`treenet_neighbors`, `treenet_stats`, ...);
+- **outside the mutex**: `treenet_rx` (called from an ISR; the ring is lock-free
+  and taking a lock in an interrupt is not allowed).
+
+Rules: the `on_recv`/`on_event` callbacks and the port callbacks (`tx`, `now_ms`,
+`rnd`, `timer_arm`) run **inside** `poll`, i.e. under your mutex — do not take the
+mutex again and do not call library functions from the callbacks (the library is
+not reentrant); defer the work (flag/queue) until `poll` returns. `treenet_init`
+runs before the threads start, so it needs no mutex.
+
 ## 6. Roles
 
 | Role | Description |

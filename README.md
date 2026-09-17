@@ -45,6 +45,9 @@ every received packet.
 - **Lock-free ISR receive.** The receive ring is a lock-free
   single-producer/single-consumer buffer, so `treenet_rx` needs no critical
   section (one producer, one consumer).
+- **Multi-threading.** When calling from several threads/tasks, the application
+  serialises the library calls with its own mutex; the ISR receive path is
+  lock-free and stays outside the lock.
 - **Link quality from RSSI/SNR.** EWMA RSSI/SNR, PDR from beacons, ETX and a
   composite link cost; the values are exposed to the application.
 - **Smart parent selection.** An objective function plus hysteresis and

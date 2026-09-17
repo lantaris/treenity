@@ -90,6 +90,15 @@ from section 1.
 - Instances are independent (no global state); when driven from different
   threads, port thread-safety is your responsibility.
 
+**With several threads/tasks, the application synchronizes.** Serialise the
+**non-ISR** calls with **your own mutex**: `treenet_poll`, `treenet_send`,
+`treenet_broadcast`, introspection. `treenet_rx` stays **outside** the mutex
+(called from the ISR; the ring is lock-free). The `on_recv`/`on_event` callbacks
+and the port callbacks run under your mutex — do not take it again and do not
+call library functions from the callbacks; defer the work (flag/queue) until
+`poll` returns. `treenet_init` runs before the threads start, so it needs no
+mutex.
+
 ## 3. Receiving data
 
 ```c

@@ -42,6 +42,7 @@ typedef struct {
     uint32_t disconnected_ms;    /**< time of the last DISCONNECTED (0 = up) */
     uint32_t disconnected_count; /**< number of disconnection episodes */
     uint32_t route_lost_count;   /**< no parent at all */
+    uint32_t tx_failed;          /**< reliable frames that exhausted retries */
 } node_stat_t;
 
 static sim_t *G;
@@ -84,6 +85,9 @@ static void on_event(sim_node_t *node, treenet_event_t ev)
         break;
     case TREENET_EV_ROUTE_LOST:
         S[i].route_lost_count++;
+        break;
+    case TREENET_EV_TX_FAILED:
+        S[i].tx_failed++;
         break;
     default:
         break;
@@ -131,6 +135,7 @@ static size_t children_of(sim_t *s, treenet_addr_t x, treenet_addr_t *out,
     size_t n = 0;
     for (size_t i = 0; i < N_NODES; i++) {
         sim_node_t *node = sim_node_at(s, i);
+        if (!node->active) continue; /* ignore powered-off nodes */
         if (node->addr != x && treenet_parent(node->net) == x) {
             if (out != NULL && n < max) out[n] = node->addr;
             n++;
@@ -290,6 +295,140 @@ static void scenario2(sim_t *s)
 }
 
 /* ------------------------------------------------------------------------- */
+/* Scenario 3: power-off with active traffic (blind-window metric)            */
+/* ------------------------------------------------------------------------- */
+
+static void scenario3(sim_t *s)
+{
+    printf("\n=== Scenario 3: power-off with active traffic, 180 s ===\n");
+    printf("(children keep sending to the master; 'failed' = datagrams that\n");
+    printf(" exhausted retries before the child reconnected)\n");
+
+    stats_reset();
+
+    uint32_t all_sum = 0, all_n = 0, all_max = 0;
+    uint32_t total_affected = 0, total_unrec = 0, events = 0;
+    uint32_t total_sent = 0, total_failed = 0;
+
+    for (int k = 0; k < 4; k++) {
+        treenet_addr_t x = pick_target(s);
+        if (x == 0) {
+            printf("\n(no transit repeater with children left)\n");
+            break;
+        }
+
+        /* Let datagrams still in flight from the previous event settle, so the
+         * per-event traffic counters stay accurate. */
+        sim_run(s, 2000);
+
+        uint32_t T = sim_now(s);
+        treenet_addr_t children[N_NODES];
+        size_t nc = children_of(s, x, children, N_NODES);
+
+        uint32_t reconn[N_NODES];
+        treenet_addr_t newp[N_NODES];
+        bool done[N_NODES];
+        uint32_t sent[N_NODES];
+        uint32_t fail0[N_NODES];
+        for (size_t c = 0; c < nc; c++) {
+            reconn[c] = 0;
+            newp[c] = TREENET_ADDR_INVALID;
+            done[c] = false;
+            sent[c] = 0;
+            fail0[c] = S[idx(children[c])].tx_failed;
+        }
+        uint32_t master_before = sim_find(s, 1)->datagrams_rx;
+
+        sim_set_active(s, x, false);
+        events++;
+
+        uint32_t elapsed = 0;
+        while (elapsed < 45000u) {
+            sim_run(s, 100);
+            elapsed += 100;
+
+            /* Each child keeps sending a reliable datagram to the master every
+             * 500 ms until it has moved off the failed parent. This exercises
+             * the ACK-based fast repair, so the blind window is traffic driven
+             * instead of the (slower) beacon timeout. */
+            if ((elapsed % 500u) == 0u) {
+                for (size_t c = 0; c < nc; c++) {
+                    if (done[c]) continue;
+                    uint8_t msg = 0x5A;
+                    if (treenet_send(sim_find(s, children[c])->net, 1, &msg,
+                                     1) == 0) {
+                        sent[c]++;
+                    }
+                }
+            }
+
+            bool all_done = true;
+            for (size_t c = 0; c < nc; c++) {
+                if (done[c]) continue;
+                treenet_addr_t p = treenet_parent(sim_find(s, children[c])->net);
+                if (p != x) {
+                    reconn[c] = elapsed;
+                    newp[c] = p;
+                    done[c] = true;
+                } else {
+                    all_done = false;
+                }
+            }
+            if (all_done) break;
+        }
+
+        /* Give the last datagrams time to reach the master. */
+        sim_run(s, 3000);
+        uint32_t master_after = sim_find(s, 1)->datagrams_rx;
+
+        printf("\nt=+%us  off node %u  (direct children: %u)\n",
+               T / 1000u, x, (unsigned)nc);
+
+        uint32_t ev_sum = 0, ev_n = 0, ev_min = 0, ev_max = 0, unrec = 0;
+        uint32_t ev_sent = 0, ev_failed = 0;
+        for (size_t c = 0; c < nc; c++) {
+            uint32_t failed = S[idx(children[c])].tx_failed - fail0[c];
+            ev_sent += sent[c];
+            ev_failed += failed;
+            if (done[c]) {
+                uint32_t d = reconn[c];
+                ev_sum += d;
+                ev_n++;
+                if (ev_min == 0 || d < ev_min) ev_min = d;
+                if (d > ev_max) ev_max = d;
+                printf("    node %-3u -> reconnect %5u ms (parent %u)  "
+                       "sent=%u failed=%u\n",
+                       children[c], d, newp[c], sent[c], failed);
+            } else {
+                unrec++;
+                printf("    node %-3u -> no reconnect  sent=%u failed=%u\n",
+                       children[c], sent[c], failed);
+            }
+        }
+        printf("    reconnect: min/avg/max = %u / %u / %u ms, unreconnected=%u\n",
+               ev_min, ev_n ? ev_sum / ev_n : 0, ev_max, unrec);
+        printf("    blind window: sent=%u failed=%u delivered=%u\n",
+               ev_sent, ev_failed,
+               (unsigned)(master_after - master_before));
+
+        total_affected += (uint32_t)nc;
+        total_unrec += unrec;
+        total_sent += ev_sent;
+        total_failed += ev_failed;
+        all_sum += ev_sum;
+        all_n += ev_n;
+        if (ev_max > all_max) all_max = ev_max;
+    }
+
+    printf("\nsummary: events=%u  affected=%u  reconnect avg=%u ms max=%u ms  "
+           "unreconnected=%u\n",
+           events, total_affected, all_n ? all_sum / all_n : 0, all_max,
+           total_unrec);
+    printf("blind window: sent=%u failed=%u (lost before reconnection)\n",
+           total_sent, total_failed);
+}
+
+/* ------------------------------------------------------------------------- */
 
 int main(void)
 {
@@ -321,6 +460,13 @@ int main(void)
     sim_run(s, 60000);
 
     scenario2(s);
+    sim_destroy(s);
+
+    /* Fresh grid for the active-traffic scenario. */
+    printf("\nbuilding a fresh grid for scenario 3...\n");
+    s = build_net();
+    sim_run(s, 120000);
+    scenario3(s);
 
     sim_destroy(s);
     return 0;
