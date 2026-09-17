@@ -99,10 +99,10 @@ mesh-algo, Contiki-NG NETSTACK, Semtech AN1200.13 (время в эфире).
    ETX доминирует, поэтому качественный многошаговый путь выигрывает у одного
    плохого линка.
 3. **Выбор родителя** по минимуму `candidate_rank`; **гистерезис** (25 %) и
-   **dwell-time** (30 с) против флаппинга.
+   **dwell-time** (10 с) против флаппинга.
 4. **LQI**: EWMA RSSI/SNR; PDR по beacon-ам с учётом объявленного интервала;
    ETX = 1/PDR.
-5. **Beaconing (Trickle)**: интервал 5→20 с, случайное смещение, сброс при
+5. **Beaconing (Trickle)**: интервал 3→12 с, случайное смещение, сброс при
    смене родителя.
 6. **DAO**: надёжное (WANT_ACK) распространение маршрутов вверх до Master;
    таблица маршрутов вниз (storing mode).
@@ -120,12 +120,15 @@ mesh-algo, Contiki-NG NETSTACK, Semtech AN1200.13 (время в эфире).
 12. **Роль «лист»** — конечное устройство, которое отправляет/принимает свои
     данные, но не пересылает чужой трафик, не ретранслирует flooding и не может
     быть родителем (флаг `TN_BEACON_ROUTER`).
+13. **Быстрый ремонт по ACK** — next hop, не подтверждающий надёжные кадры,
+    помечается «подозрительным» и исключается из выбора родителя; родитель
+    перевыбирается немедленно (за секунды, а не за `PARENT_TIMEOUT`).
 
 ---
 
 ## 6. Верификация (текущая)
 
-- **1886 проверок**, 0 провалов (`make test`, `ctest`).
+- **1904 проверки**, 0 провалов (`make test`, `ctest`).
 - Сценарии: формирование сети, порядок Rank, unicast вниз/вверх, broadcast,
   бесшовное перестроение при отказе ретранслятора, сброс интервала beacon при
   смене родителя, устойчивость к битовым ошибкам, метрики соседей.
@@ -153,19 +156,21 @@ mesh-algo, Contiki-NG NETSTACK, Semtech AN1200.13 (время в эфире).
 | `TREENET_DUP_CACHE_SIZE` | 64 | кэш дубликатов |
 | `TREENET_TX_QUEUE_SIZE` | 8 | очередь передачи |
 | `TREENET_RX_RING_BYTES` | 1024 | кольцевой буфер приёма |
-| `TREENET_BEACON_MIN_MS` | 5000 | минимальный интервал beacon |
-| `TREENET_BEACON_MAX_MS` | 20000 | максимальный интервал beacon |
-| `TREENET_PARENT_TIMEOUT_MS` | 60000 | таймаут родителя |
-| `TREENET_NEIGHBOR_TIMEOUT_MS` | 90000 | таймаут соседа |
-| `TREENET_PARENT_DWELL_MS` | 30000 | минимальное время удержания родителя |
+| `TREENET_BEACON_MIN_MS` | 3000 | минимальный интервал beacon |
+| `TREENET_BEACON_MAX_MS` | 12000 | максимальный интервал beacon |
+| `TREENET_PARENT_TIMEOUT_MS` | 36000 | таймаут родителя |
+| `TREENET_NEIGHBOR_TIMEOUT_MS` | 54000 | таймаут соседа |
+| `TREENET_PARENT_DWELL_MS` | 10000 | минимальное время удержания родителя |
 | `TREENET_PARENT_HYSTERESIS_PCT` | 25 | порог смены родителя |
 | `TREENET_OF_W_SNR/W_ETX` | 120/96 | веса целевой функции |
 | `TREENET_FLOOD_CW_MS` | 500 | окно конкуренции flooding |
 | `TREENET_ACK_TIMEOUT_MS` | 2000 | ожидание ACK |
 | `TREENET_MAX_RETRIES` | 3 | число передач надёжного кадра |
-| `TREENET_ROUTE_REFRESH_MS` | 60000 | период DAO |
-| `TREENET_ROUTE_TIMEOUT_MS` | 180000 | срок жизни маршрута |
-| `TREENET_PROBE_INTERVAL_MS` | 5000 | период PROBE при поиске родителя |
+| `TREENET_ACK_FAIL_THRESHOLD` | 2 | неудач ACK до пометки линка «подозрительным» |
+| `TREENET_LINK_SUSPECT_MS` | 30000 | срок исключения «подозрительного» линка |
+| `TREENET_ROUTE_REFRESH_MS` | 45000 | период DAO |
+| `TREENET_ROUTE_TIMEOUT_MS` | 135000 | срок жизни маршрута |
+| `TREENET_PROBE_INTERVAL_MS` | 3000 | период PROBE при поиске родителя |
 | `TREENET_REASM_TIMEOUT_MS` | 8000 | срок жизни слота сборки фрагментов |
 
 **Обязательное соотношение:**

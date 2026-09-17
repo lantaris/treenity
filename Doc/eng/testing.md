@@ -27,6 +27,7 @@ make test      # build and run the tests
 make example   # build the example
 make run       # build and run the example
 make fuzz      # fuzzing (200000 iterations)
+make repeaters # report: 1 Master + 30 repeaters (stress scenarios)
 ```
 
 ### ARM cross-build
@@ -69,6 +70,11 @@ On the simulator:
   bounded by the PROBE interval;
 - **leaf role**: joins and exchanges data both ways, is never chosen as a parent
   by other nodes, and does not rebroadcast floods;
+- **ACK and fast repair**: an ACK is accepted from any neighbour (opportunistic
+  forwarding), and a next hop that stops acknowledging is marked suspect and the
+  parent is re-selected in seconds;
+- **coexisting networks**: two networks with different `net_id` in one area do
+  not exchange data and do not see each other in the neighbour table;
 - neighbour metrics (RSSI/SNR/cost/parent).
 
 ### Corruption tests (`tests/unit/test_corrupt.c`)
@@ -104,6 +110,19 @@ After every input the invariants of the live instance are checked: neighbour and
 route table sizes, `rank`/`connected` consistency, absence of a self-parent,
 correct Master state. A violation calls `abort()`. It builds both as a normal
 executable and with libFuzzer (`-DTREENET_LIBFUZZER`).
+
+### Repeater report (`tests/sim/test_repeaters.c`)
+
+Stress test: 1 Master + 30 `REPEATER` nodes in a 6x5 grid (150 m spacing, 250 m
+range, SF7). Two 180 s virtual-time scenarios:
+
+1. **Corrupted / lost frames** (BER) — per-node parent churn: number of changes,
+   min/avg/max intervals, disconnection episodes.
+2. **Transit repeaters lose power** — reconnection timings of their direct
+   children (time until a child moves off the failed parent).
+
+Run it with `make repeaters` (or `./build/treenet_repeaters`). It prints a
+concise report and exits with code 0.
 
 ## 3. How to read the result
 

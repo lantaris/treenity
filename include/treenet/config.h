@@ -112,7 +112,7 @@
 
 /** Minimum interval between two beacons from the same node. */
 #ifndef TREENET_BEACON_MIN_MS
-#define TREENET_BEACON_MIN_MS 5000u
+#define TREENET_BEACON_MIN_MS 3000u
 #endif
 
 /**
@@ -124,7 +124,7 @@
  * used here.
  */
 #ifndef TREENET_BEACON_MAX_MS
-#define TREENET_BEACON_MAX_MS 20000u
+#define TREENET_BEACON_MAX_MS 12000u
 #endif
 
 /**
@@ -132,7 +132,7 @@
  * Must be > TREENET_BEACON_MAX_MS (see the note above).
  */
 #ifndef TREENET_NEIGHBOR_TIMEOUT_MS
-#define TREENET_NEIGHBOR_TIMEOUT_MS 90000u
+#define TREENET_NEIGHBOR_TIMEOUT_MS 54000u
 #endif
 
 /**
@@ -140,12 +140,12 @@
  * Must be > TREENET_BEACON_MAX_MS (see the note above).
  */
 #ifndef TREENET_PARENT_TIMEOUT_MS
-#define TREENET_PARENT_TIMEOUT_MS 60000u
+#define TREENET_PARENT_TIMEOUT_MS 36000u
 #endif
 
 /** Minimum time a node keeps its parent before it is allowed to switch. */
 #ifndef TREENET_PARENT_DWELL_MS
-#define TREENET_PARENT_DWELL_MS 30000u
+#define TREENET_PARENT_DWELL_MS 10000u
 #endif
 
 /** Channel-access (CSMA/CA) slot time. */
@@ -168,14 +168,30 @@
 #define TREENET_MAX_RETRIES 3u
 #endif
 
+/**
+ * Number of reliable frames that must exhaust their retries without an ACK
+ * before a link is marked "suspect" and excluded from parent selection. This
+ * is the fast, ACK-based failure detector that complements the (slower)
+ * beacon timeout: a node that is actively sending notices a dead next hop in
+ * a few seconds instead of PARENT_TIMEOUT milliseconds.
+ */
+#ifndef TREENET_ACK_FAIL_THRESHOLD
+#define TREENET_ACK_FAIL_THRESHOLD 2u
+#endif
+
+/** How long a "suspect" link is excluded from parent selection. */
+#ifndef TREENET_LINK_SUSPECT_MS
+#define TREENET_LINK_SUSPECT_MS 30000u
+#endif
+
 /** Interval between periodic route (DAO) refreshes sent towards the Master. */
 #ifndef TREENET_ROUTE_REFRESH_MS
-#define TREENET_ROUTE_REFRESH_MS 60000u
+#define TREENET_ROUTE_REFRESH_MS 45000u
 #endif
 
 /** A downward route entry expires after this long without a refresh. */
 #ifndef TREENET_ROUTE_TIMEOUT_MS
-#define TREENET_ROUTE_TIMEOUT_MS 180000u
+#define TREENET_ROUTE_TIMEOUT_MS 135000u
 #endif
 
 /** Duplicate-cache entry lifetime. */
@@ -185,7 +201,7 @@
 
 /** How often a disconnected node broadcasts a PROBE to find a parent. */
 #ifndef TREENET_PROBE_INTERVAL_MS
-#define TREENET_PROBE_INTERVAL_MS 5000u
+#define TREENET_PROBE_INTERVAL_MS 3000u
 #endif
 
 /** Lifetime of a partially reassembled fragmented datagram. */

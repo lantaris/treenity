@@ -120,14 +120,61 @@ static void tn_send_ack(treenet_t *t, treenet_addr_t to, uint16_t seq)
     (void)tn_tx_submit(t, &f, false, to, 0);
 }
 
-/** Match an inbound ACK against a pending reliable frame. */
+/**
+ * @brief Update a link's ACK-based failure state.
+ *
+ * @param dst          the intended next hop of the frame
+ * @param acked_by_dst true when @p dst itself acknowledged (link healthy)
+ *
+ * A next hop that never acknowledges (even if other neighbours opportunistically
+ * forward and acknowledge the frame) accumulates failures; after
+ * TREENET_ACK_FAIL_THRESHOLD it is marked "suspect" and excluded from parent
+ * selection, and if it is the parent the node re-selects immediately. This is
+ * the fast failure detector that complements the beacon timeout.
+ */
+static void tn_link_ack_result(treenet_t *t, treenet_addr_t dst,
+                               bool acked_by_dst)
+{
+    tn_neighbor_t *n = tn_neighbor_find(&t->neighbors, dst);
+    if (n == NULL) return;
+
+    if (acked_by_dst) {
+        n->ack_fail = 0;
+        n->suspect_until_ms = 0;
+        return;
+    }
+    if (n->ack_fail < 0xFFu) n->ack_fail++;
+    if (n->ack_fail >= TREENET_ACK_FAIL_THRESHOLD) {
+        n->suspect_until_ms = t->now_ms + TREENET_LINK_SUSPECT_MS;
+        n->ack_fail = 0;
+        if (n->addr == t->parent) {
+            /* The parent is now excluded: re-select at once. */
+            (void)tn_routing_select_parent(t, t->now_ms);
+        }
+    }
+}
+
+/**
+ * @brief Match an inbound ACK against a pending reliable frame.
+ *
+ * Frames are physically broadcast, so a neighbour other than the intended next
+ * hop may accept (and forward) the frame and answer with an ACK. Accepting any
+ * known neighbour's ACK with the matching sequence number recognises such
+ * opportunistic forwarding instead of retransmitting into a dead next hop. The
+ * intended next hop still has to answer for the link to be considered healthy.
+ */
 static void tn_handle_ack(treenet_t *t, const tn_frame_t *f)
 {
+    tn_neighbor_t *from = tn_neighbor_find(&t->neighbors, f->src);
+    if (from == NULL) {
+        return; /* ignore ACKs from unknown nodes */
+    }
     for (size_t i = 0; i < TREENET_TX_QUEUE_SIZE; i++) {
         tn_tx_slot_t *s = &t->tx[i];
-        if (s->valid && s->reliable && s->ack_dst == f->src &&
-            s->ack_seq == f->seq) {
+        if (s->valid && s->reliable && s->ack_seq == f->seq) {
+            treenet_addr_t dst = s->ack_dst;
             s->valid = false;
+            tn_link_ack_result(t, dst, f->src == dst);
             tn_emit_event(t, TREENET_EV_TX_DONE, NULL);
             return;
         }
@@ -143,7 +190,9 @@ static void tn_tx_poll(treenet_t *t)
         if (tn_time_after(s->next_tx_ms, t->now_ms)) continue;
 
         if (s->reliable && s->attempts >= TREENET_MAX_RETRIES) {
+            treenet_addr_t dst = s->ack_dst;
             s->valid = false;
+            tn_link_ack_result(t, dst, false);
             tn_emit_event(t, TREENET_EV_TX_FAILED, NULL);
             continue;
         }

@@ -35,6 +35,10 @@ struct sim {
     double range_m;
     double bit_error_rate;
 
+    uint8_t  radio_sf;
+    uint32_t radio_bw_hz;
+    uint16_t net_id;
+
     size_t     count;
     sim_node_t nodes[SIM_MAX_NODES];
 
@@ -281,6 +285,9 @@ sim_t *sim_create(uint32_t seed, double tx_power_dbm, double sensitivity_dbm,
     s->path_loss_exp = 2.7;  /* suburban-ish exponent */
     s->range_m = 1.0e9;      /* unlimited unless overridden */
     s->bit_error_rate = 0.0; /* clean channel by default */
+    s->radio_sf = 9;
+    s->radio_bw_hz = 125000u;
+    s->net_id = 1u;
 
     g_sim = s;
     return s;
@@ -322,13 +329,13 @@ sim_node_t *sim_add_node(sim_t *s, treenet_addr_t addr, treenet_role_t role,
     memset(&cfg, 0, sizeof(cfg));
     cfg.addr = addr;
     cfg.role = role;
-    cfg.net_id = 1;
+    cfg.net_id = s->net_id;
     cfg.reliable = reliable;
     cfg.on_recv = sim_on_recv;
     cfg.on_event = sim_on_event;
     cfg.user = n;
-    cfg.radio.spreading_factor = 9;
-    cfg.radio.bandwidth_hz = 125000u;
+    cfg.radio.spreading_factor = s->radio_sf;
+    cfg.radio.bandwidth_hz = s->radio_bw_hz;
     cfg.radio.coding_rate = 1;
     cfg.radio.tx_power_dbm = (int8_t)s->tx_power_dbm;
 
@@ -406,6 +413,19 @@ void sim_set_bit_error_rate(sim_t *s, double ber)
 {
     if (s == NULL) return;
     s->bit_error_rate = (ber > 0.0) ? ber : 0.0;
+}
+
+void sim_set_radio(sim_t *s, uint8_t sf, uint32_t bw_hz)
+{
+    if (s == NULL) return;
+    s->radio_sf = sf ? sf : 9;
+    s->radio_bw_hz = bw_hz ? bw_hz : 125000u;
+}
+
+void sim_set_net_id(sim_t *s, uint16_t net_id)
+{
+    if (s == NULL) return;
+    s->net_id = net_id;
 }
 
 void sim_set_callbacks(sim_t *s, sim_recv_cb recv, sim_event_cb event)

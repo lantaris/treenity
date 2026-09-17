@@ -103,7 +103,8 @@ and never use dynamic memory.
 - The address is assigned by the application in `treenet_config_t.addr` (for
   example from a hardware MAC/ID). The library never assigns addresses.
 - `net_id` (16 bits) is a logical network identifier; frames with a different
-  `net_id` are silently ignored, so several networks can share a channel.
+  `net_id` are silently ignored (before link metrics, so foreign nodes never
+  appear in the neighbour table), which lets several networks share a channel.
 
 ## 8. Extension points
 

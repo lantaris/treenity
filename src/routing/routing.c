@@ -155,6 +155,19 @@ static bool neighbor_fresh(const tn_neighbor_t *n, uint32_t now)
            tn_elapsed(n->last_seen_ms, now) <= TREENET_PARENT_TIMEOUT_MS;
 }
 
+/**
+ * @brief Whether a neighbour may be used as a parent right now.
+ *
+ * A link is unusable if it is stale (no beacon) or "suspect" because several
+ * reliable frames were not acknowledged (see the fast failure detector in
+ * tn_tx_poll).
+ */
+static bool neighbor_usable(const tn_neighbor_t *n, uint32_t now)
+{
+    return neighbor_fresh(n, now) &&
+           !tn_time_after(n->suspect_until_ms, now);
+}
+
 /* Select the neighbour with the lowest candidate rank. */
 static tn_neighbor_t *best_candidate(treenet_t *t, uint16_t *out_rank)
 {
@@ -163,7 +176,7 @@ static tn_neighbor_t *best_candidate(treenet_t *t, uint16_t *out_rank)
 
     for (size_t i = 0; i < TREENET_MAX_NEIGHBORS; i++) {
         tn_neighbor_t *n = &t->neighbors.entries[i];
-        if (!neighbor_fresh(n, t->now_ms)) continue;
+        if (!neighbor_usable(n, t->now_ms)) continue;
         if (n->addr == t->addr) continue;
 
         uint16_t r = tn_routing_candidate_rank(n);
@@ -252,7 +265,7 @@ bool tn_routing_select_parent(treenet_t *t, uint32_t now)
                              ? tn_neighbor_find(&t->neighbors, t->parent)
                              : NULL;
     uint16_t cur_rank = tn_routing_candidate_rank(cur);
-    bool cur_alive = (cur != NULL) && neighbor_fresh(cur, now) &&
+    bool cur_alive = (cur != NULL) && neighbor_usable(cur, now) &&
                      (cur_rank != TREENET_RANK_INFINITE);
 
     if (cur_alive) {

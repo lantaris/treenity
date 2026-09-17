@@ -61,6 +61,13 @@ add_executable(treenet_fuzz tests/fuzz/fuzz_frame.c)
 target_link_libraries(treenet_fuzz PRIVATE treenet_sim)
 add_test(NAME treenity_fuzz COMMAND treenet_fuzz 50000)
 
+# --- Repeater stress / report ----------------------------------------------
+# One Master + 30 repeaters in a grid; measures reconfiguration timings under
+# corrupted frames and under transit-repeater power loss. Prints a report.
+add_executable(treenet_repeaters tests/sim/test_repeaters.c)
+target_link_libraries(treenet_repeaters PRIVATE treenet_sim)
+add_test(NAME treenity_repeaters COMMAND treenet_repeaters)
+
 # --- Optional freestanding cross-build check -------------------------------
 # Example: cmake -S . -B build-arm -DCMAKE_C_COMPILER=arm-none-eabi-gcc
 # The core library has no dependency on the C library beyond string.h/stdint.h.

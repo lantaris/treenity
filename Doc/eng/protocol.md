@@ -134,10 +134,19 @@ duplicates during forwarding and flooding.
 - A receiver of a frame with the `WANT_ACK` flag replies with an `ACK` frame to
   the `prev` address.
 - The `ACK` reuses the `seq` field to carry the acknowledged sequence number.
-- The sender matches the ACK by `(ack_dst, ack_seq)` against its slot and frees
-  it (`TX_DONE` event).
+- The sender matches the ACK by `seq` and accepts it from **any known
+  neighbour**: frames are physically broadcast, so a neighbour other than the
+  logical next hop may deliver the frame (opportunistic forwarding). `ack_dst`
+  is only the preferred next hop. On a match the slot is freed (`TX_DONE`).
 - Without an ACK the frame is retransmitted, up to `TREENET_MAX_RETRIES`
-  transmissions in total.
+  transmissions in total; then `TX_FAILED`.
+- **Fast repair.** A next hop that does not acknowledge itself (even if another
+  neighbour forwards and acknowledges the frame) accumulates failures; after
+  `TREENET_ACK_FAIL_THRESHOLD` it is marked "suspect" for
+  `TREENET_LINK_SUSPECT_MS` and excluded from parent selection. If it is the
+  current parent, the node re-selects the parent **immediately**, without
+  waiting for the beacon timeout (`PARENT_TIMEOUT`). This cuts the blind window
+  from ~36 s to a few seconds for nodes that are actively sending.
 
 ### 3.4 Time-on-air
 
@@ -170,8 +179,8 @@ complete the datagram is delivered to `on_recv`. The maximum fragment count is
 > **Critical:** `TREENET_BEACON_MAX_MS` must be smaller than
 > `TREENET_PARENT_TIMEOUT_MS` and `TREENET_NEIGHBOR_TIMEOUT_MS` (a factor of
 > three is used). Otherwise a node considers a healthy neighbour dead in the
-> gap between beacons and flapping begins. The defaults are consistent: 20 s
-> versus 60/90 s.
+> gap between beacons and flapping begins. The defaults are consistent: 12 s
+> versus 36/54 s.
 
 ### 4.2 Link quality estimation (LQI)
 

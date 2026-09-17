@@ -49,6 +49,9 @@ typedef struct {
     uint32_t       last_beacon_ms;/**< time of the last beacon */
     uint32_t       est_interval_ms;/**< learned beacon interval */
     bool           have_interval; /**< est_interval_ms is valid */
+
+    uint8_t        ack_fail;      /**< reliable frames that got no ACK in a row */
+    uint32_t       suspect_until_ms;/**< link excluded from parent selection */
 } tn_neighbor_t;
 
 /** Fixed-size neighbour table. */

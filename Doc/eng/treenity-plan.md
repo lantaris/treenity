@@ -98,10 +98,10 @@ Details in [architecture.md](architecture.md) and [protocol.md](protocol.md).
 2. **Objective function** `link_cost = (W_SNR·snr_score + W_ETX·etx_pen)/256`;
    ETX dominates, so a good multi-hop path beats a single bad link.
 3. **Parent selection** by minimum `candidate_rank`; **hysteresis** (25 %) and
-   **dwell-time** (30 s) prevent flapping.
+   **dwell-time** (10 s) prevent flapping.
 4. **LQI**: EWMA RSSI/SNR; PDR from beacons using the advertised interval;
    ETX = 1/PDR.
-5. **Beaconing (Trickle)**: interval 5→20 s, random offset, reset on a parent
+5. **Beaconing (Trickle)**: interval 3→12 s, random offset, reset on a parent
    change.
 6. **DAO**: reliable (`WANT_ACK`) route advertisement up to the Master; downward
    route table (storing mode).
@@ -118,12 +118,15 @@ Details in [architecture.md](architecture.md) and [protocol.md](protocol.md).
 12. **Leaf role** — an end device that sends/receives its own traffic but never
     forwards other traffic, never rebroadcasts floods and is never chosen as a
     parent (`TN_BEACON_ROUTER` flag).
+13. **ACK-based fast repair** — a next hop that does not acknowledge reliable
+    frames is marked "suspect" and excluded from parent selection; the parent is
+    re-selected immediately (in seconds, not after `PARENT_TIMEOUT`).
 
 ---
 
 ## 6. Verification (current)
 
-- **1886 checks**, 0 failures (`make test`, `ctest`).
+- **1904 checks**, 0 failures (`make test`, `ctest`).
 - Scenarios: network formation, rank ordering, unicast down/up, broadcast,
   seamless reconfiguration on relay failure, beacon interval reset on
   re-parenting, tolerance to bit errors, neighbour metrics.
@@ -151,19 +154,21 @@ Details in [architecture.md](architecture.md) and [protocol.md](protocol.md).
 | `TREENET_DUP_CACHE_SIZE` | 64 | duplicate cache |
 | `TREENET_TX_QUEUE_SIZE` | 8 | transmit queue |
 | `TREENET_RX_RING_BYTES` | 1024 | receive ring buffer |
-| `TREENET_BEACON_MIN_MS` | 5000 | minimum beacon interval |
-| `TREENET_BEACON_MAX_MS` | 20000 | maximum beacon interval |
-| `TREENET_PARENT_TIMEOUT_MS` | 60000 | parent timeout |
-| `TREENET_NEIGHBOR_TIMEOUT_MS` | 90000 | neighbour timeout |
-| `TREENET_PARENT_DWELL_MS` | 30000 | minimum parent hold time |
+| `TREENET_BEACON_MIN_MS` | 3000 | minimum beacon interval |
+| `TREENET_BEACON_MAX_MS` | 12000 | maximum beacon interval |
+| `TREENET_PARENT_TIMEOUT_MS` | 36000 | parent timeout |
+| `TREENET_NEIGHBOR_TIMEOUT_MS` | 54000 | neighbour timeout |
+| `TREENET_PARENT_DWELL_MS` | 10000 | minimum parent hold time |
 | `TREENET_PARENT_HYSTERESIS_PCT` | 25 | parent switch threshold |
 | `TREENET_OF_W_SNR/W_ETX` | 120/96 | objective function weights |
 | `TREENET_FLOOD_CW_MS` | 500 | flooding contention window |
 | `TREENET_ACK_TIMEOUT_MS` | 2000 | ACK wait time |
 | `TREENET_MAX_RETRIES` | 3 | transmissions of a reliable frame |
-| `TREENET_ROUTE_REFRESH_MS` | 60000 | DAO period |
-| `TREENET_ROUTE_TIMEOUT_MS` | 180000 | route lifetime |
-| `TREENET_PROBE_INTERVAL_MS` | 5000 | PROBE period while searching for a parent |
+| `TREENET_ACK_FAIL_THRESHOLD` | 2 | ACK failures before a link is marked suspect |
+| `TREENET_LINK_SUSPECT_MS` | 30000 | how long a suspect link is excluded |
+| `TREENET_ROUTE_REFRESH_MS` | 45000 | DAO period |
+| `TREENET_ROUTE_TIMEOUT_MS` | 135000 | route lifetime |
+| `TREENET_PROBE_INTERVAL_MS` | 3000 | PROBE period while searching for a parent |
 | `TREENET_REASM_TIMEOUT_MS` | 8000 | reassembly slot lifetime |
 
 **Mandatory relation:**

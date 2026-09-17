@@ -152,6 +152,23 @@ void sim_set_range(sim_t *s, double range_m);
  */
 void sim_set_bit_error_rate(sim_t *s, double ber);
 
+/**
+ * @brief Set the LoRa parameters reported to nodes added afterwards.
+ *
+ * Only used for the library's time-on-air estimate; the simulator's collision
+ * model is step based and does not depend on it. Defaults to SF9 / 125 kHz.
+ */
+void sim_set_radio(sim_t *s, uint8_t sf, uint32_t bw_hz);
+
+/**
+ * @brief Set the logical network id for nodes added afterwards.
+ *
+ * Lets one simulation host several co-located networks (different net_id):
+ * they share the channel physically but the library ignores frames from other
+ * networks. Defaults to 1.
+ */
+void sim_set_net_id(sim_t *s, uint16_t net_id);
+
 #ifdef __cplusplus
 }
 #endif

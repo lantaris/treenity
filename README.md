@@ -51,7 +51,9 @@ every received packet.
   and is never chosen as a parent).
 - **Managed flooding** for broadcasts with SNR-based priority.
 - **Reliability.** Hop-by-hop ACK and retransmissions; reliable route
-  advertisement (DAO).
+  advertisement (DAO). An ACK is accepted from any neighbour that forwarded the
+  frame, and a next hop that stops acknowledging is detected in seconds (fast
+  local repair).
 - **Integrity check.** A CRC-16 on every frame (enabled by default): corrupted
   frames are dropped before processing and never change network state.
 - **Fragmentation** of datagrams larger than the MTU.
@@ -108,6 +110,7 @@ make            # core -> build/libtreenet.a
 make test       # build and run the tests
 make run        # build and run the example
 make fuzz       # fuzzing
+make repeaters  # stress report: 1 Master + 30 repeaters
 ```
 
 ### ARM cross-build
@@ -206,7 +209,7 @@ treenity/
 ## Testing
 
 ```sh
-make test          # unit + scenario tests (1886 checks)
+make test          # unit + scenario tests (1904 checks)
 make fuzz          # fuzzing, 200000 iterations
 ```
 
@@ -229,7 +232,7 @@ TREENET_BEACON_MAX_MS  <  TREENET_PARENT_TIMEOUT_MS  <  TREENET_NEIGHBOR_TIMEOUT
 | `TREENET_ENABLE_FRAME_CRC` | 1 (frame CRC-16, +2 bytes) |
 | `TREENET_MAX_NEIGHBORS` | 32 |
 | `TREENET_MAX_ROUTES` | 128 (Master of 1000 nodes → 1024) |
-| `TREENET_BEACON_MIN_MS` / `MAX_MS` | 5000 / 20000 |
+| `TREENET_BEACON_MIN_MS` / `MAX_MS` | 3000 / 12000 |
 | `TREENET_PARENT_HYSTERESIS_PCT` | 25 |
 
 ## Documentation

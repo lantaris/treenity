@@ -34,6 +34,46 @@ static sim_t *make_chain(unsigned nodes)
     return s;
 }
 
+/* --- Event counters for the ACK / fast-repair tests ---------------------- */
+typedef struct {
+    uint32_t tx_done;
+    uint32_t tx_failed;
+    uint32_t parent_changed;
+} evc_t;
+
+static evc_t EVC[8];
+
+static void ev_count(sim_node_t *n, treenet_event_t ev)
+{
+    if (n->addr >= 8) return;
+    switch (ev) {
+    case TREENET_EV_TX_DONE:        EVC[n->addr].tx_done++; break;
+    case TREENET_EV_TX_FAILED:      EVC[n->addr].tx_failed++; break;
+    case TREENET_EV_PARENT_CHANGED: EVC[n->addr].parent_changed++; break;
+    default: break;
+    }
+}
+
+/**
+ * Build M(0,0) - X(150,0) - A(300,0) with B(150,150).
+ *
+ * A hears X and B but not M, so its parent is X. B hears M and X, so its parent
+ * is M. When X dies, A's frames are still heard by B, which forwards them to M:
+ * an opportunistic forwarder.
+ */
+static sim_t *make_ack_net(void)
+{
+    sim_t *s = sim_create(0xAAu, SIM_TX_POWER, SIM_SENSITIVITY, SIM_NOISE);
+    sim_set_path_loss(s, 70.0, 3.0);
+    sim_set_range(s, SIM_RANGE);
+    sim_set_callbacks(s, NULL, ev_count);
+    sim_add_node(s, 1, TREENET_ROLE_MASTER, 0.0, 0.0, true);   /* M */
+    sim_add_node(s, 2, TREENET_ROLE_NODE, 150.0, 0.0, true);   /* X */
+    sim_add_node(s, 3, TREENET_ROLE_NODE, 300.0, 0.0, true);   /* A */
+    sim_add_node(s, 4, TREENET_ROLE_NODE, 150.0, 150.0, true); /* B */
+    return s;
+}
+
 static void test_network_forms(void)
 {
     sim_t *s = make_chain(4);
@@ -378,6 +418,106 @@ static void test_bit_errors_tolerated(void)
     sim_destroy(s);
 }
 
+static void test_ack_from_any_neighbor(void)
+{
+    memset(EVC, 0, sizeof(EVC));
+    sim_t *s = make_ack_net();
+    sim_run(s, 90000);
+
+    sim_node_t *master = sim_find(s, 1);
+    sim_node_t *A = sim_find(s, 3);
+    CHECK_EQ(treenet_parent(A->net), 2u); /* A's parent is X */
+
+    /* X loses power. A's frame is forwarded by B, whose ACK A now accepts. */
+    sim_set_active(s, 2, false);
+    uint32_t mbefore = master->datagrams_rx;
+    uint32_t done_before = EVC[3].tx_done;
+
+    uint8_t msg[3] = { 7, 7, 7 };
+    CHECK_EQ(treenet_send(A->net, 1, msg, sizeof(msg)), 0);
+    sim_run(s, 5000);
+
+    CHECK(master->datagrams_rx > mbefore); /* delivered via B */
+    CHECK(EVC[3].tx_done > done_before);   /* A recognised B's ACK */
+    CHECK_EQ(EVC[3].tx_failed, 0u);
+
+    sim_destroy(s);
+}
+
+static void test_fast_repair_on_ack_failure(void)
+{
+    memset(EVC, 0, sizeof(EVC));
+    sim_t *s = make_ack_net();
+    sim_run(s, 90000);
+
+    sim_node_t *A = sim_find(s, 3);
+    CHECK_EQ(treenet_parent(A->net), 2u);
+
+    sim_set_active(s, 2, false);
+    uint32_t T = sim_now(s);
+    uint32_t changes_before = EVC[3].parent_changed;
+
+    /* Keep sending. Each frame is forwarded by B, but X never acknowledges, so
+     * after TREENET_ACK_FAIL_THRESHOLD frames X is marked suspect and A
+     * re-parents to B, well before the beacon timeout. */
+    for (int i = 0; i < 10; i++) {
+        uint8_t msg[2] = { 1, 2 };
+        (void)treenet_send(A->net, 1, msg, sizeof(msg));
+        sim_run(s, 500);
+        if (EVC[3].parent_changed > changes_before) break;
+    }
+    uint32_t reconn = sim_now(s) - T;
+
+    CHECK(EVC[3].parent_changed > changes_before);
+    CHECK_EQ(treenet_parent(A->net), 4u);      /* re-parented to B */
+    CHECK(reconn < TREENET_PARENT_TIMEOUT_MS); /* faster than the beacon timeout */
+    CHECK(reconn <= 10000u);
+
+    sim_destroy(s);
+}
+
+static void test_coexisting_networks(void)
+{
+    /* Two co-located networks (different net_id) share the channel physically
+     * but must not exchange anything. */
+    sim_t *s = sim_create(0xC0u, SIM_TX_POWER, SIM_SENSITIVITY, SIM_NOISE);
+    sim_set_path_loss(s, SIM_REF_LOSS, SIM_EXPONENT);
+    sim_set_range(s, SIM_RANGE);
+
+    sim_set_net_id(s, 1);
+    sim_add_node(s, 1, TREENET_ROLE_MASTER, 0.0, 0.0, false);   /* net 1 */
+    sim_add_node(s, 2, TREENET_ROLE_NODE, 100.0, 0.0, false);
+
+    sim_set_net_id(s, 2);
+    sim_add_node(s, 3, TREENET_ROLE_MASTER, 0.0, 150.0, false); /* net 2 */
+    sim_add_node(s, 4, TREENET_ROLE_NODE, 100.0, 150.0, false);
+
+    sim_run(s, 60000);
+
+    sim_node_t *a = sim_find(s, 2);
+    sim_node_t *b = sim_find(s, 4);
+
+    CHECK(treenet_is_connected(a->net));
+    CHECK_EQ(treenet_parent(a->net), 1u); /* joined its own Master, not net 2 */
+    CHECK(treenet_is_connected(b->net));
+    CHECK_EQ(treenet_parent(b->net), 3u);
+
+    /* Foreign frames are filtered before link metrics, so nodes of the other
+     * network never appear as neighbours. */
+    treenet_neighbor_info_t nb[8];
+    CHECK_EQ(treenet_neighbors(a->net, nb, 8), 1u);
+    CHECK_EQ(nb[0].addr, 1u);
+
+    /* A broadcast in network 1 must not reach network 2. */
+    uint32_t b_before = b->datagrams_rx;
+    uint8_t msg = 0x5A;
+    CHECK_EQ(treenet_broadcast(sim_find(s, 1)->net, &msg, 1), 0);
+    sim_run(s, 5000);
+    CHECK_EQ(b->datagrams_rx, b_before);
+
+    sim_destroy(s);
+}
+
 static void test_neighbor_metrics(void)
 {
     sim_t *s = make_chain(2); /* master + one node */
@@ -411,6 +551,9 @@ void run_mesh_tests(void)
     RUN_TEST(test_leaf_joins_and_traffic);
     RUN_TEST(test_leaf_not_a_parent);
     RUN_TEST(test_leaf_does_not_rebroadcast);
+    RUN_TEST(test_ack_from_any_neighbor);
+    RUN_TEST(test_fast_repair_on_ack_failure);
+    RUN_TEST(test_coexisting_networks);
     RUN_TEST(test_bit_errors_tolerated);
     RUN_TEST(test_neighbor_metrics);
 }

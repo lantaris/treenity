@@ -138,6 +138,26 @@ for (size_t i = 0; i < n; i++) {
 > Always check: `TREENET_BEACON_MAX_MS < TREENET_PARENT_TIMEOUT_MS <
 > TREENET_NEIGHBOR_TIMEOUT_MS`.
 
+**The defaults are the "balanced" profile:** beacon 3→12 s, parent timeout 36 s
+(failure detection ~36 s). Faster reaction needs a shorter beacon interval, but
+the airtime load grows as `N × ToA / interval` (beacon ToA ≈ 80 ms at SF7,
+≈ 280 ms at SF9). Rough guidance at a ~30 % beacon airtime budget:
+
+| Interval | SF7 | SF9 |
+|---|---|---|
+| 12 s | ~45 nodes | ~13 nodes |
+| 20 s | ~75 nodes | ~21 nodes |
+
+For larger networks raise `BEACON_MAX_MS` (and the timeouts) or narrow the BW
+(250/500 kHz reduce ToA). Trickle without redundancy suppression does not scale
+to thousands of nodes — that is a separate task.
+
+**Fast repair.** `TREENET_ACK_FAIL_THRESHOLD` (default 2) is how many reliable
+frames without an ACK from the next hop mark it "suspect";
+`TREENET_LINK_SUSPECT_MS` (30000) is how long it is excluded from parent
+selection. Nodes that are actively sending switch in seconds instead of waiting
+for `PARENT_TIMEOUT`.
+
 ## 8. Common integration mistakes
 
 | Symptom | Cause |
@@ -147,3 +167,24 @@ for (size_t i = 0; i < n; i++) {
 | Downward data never arrives | the DAO does not reach the Master (check reliability, `hop_limit`) |
 | High traffic | beacons too frequent; reduce overhead |
 | `treenet_init` returned `NULL` | not enough memory, mandatory port functions missing, invalid address |
+
+## 9. Coexisting networks
+
+Several networks can operate in the same area. They are separated by `net_id`
+(16 bits): frames with another `net_id` are ignored **before** link metrics are
+updated, so foreign nodes never even appear in the neighbour table.
+
+Keep in mind:
+
+- **The channel is shared.** `net_id` does not prevent collisions or airtime
+  contention — the networks still interfere physically. For real isolation
+  separate them by **frequency** or by **LoRa sync word** (configured on the
+  port side; the library does not need it).
+- **One instance = one network.** A node belongs to exactly one network
+  (`net_id` plus its own context). To have a node in two networks, run **two
+  instances** (preferably two radios; on a single radio the port must dispatch
+  received frames by `net_id` and serialise transmission).
+- **Each network has its own Master.**
+
+This is verified by `test_coexisting_networks` (two networks in one area: nodes
+join only their own Master and a foreign broadcast is not delivered).

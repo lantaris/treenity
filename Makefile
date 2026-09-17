@@ -38,7 +38,7 @@ TEST_SRC := tests/unit/test_main.c tests/unit/test_core.c tests/unit/test_mesh.c
 
 LIB      := $(BUILD)/libtreenet.a
 
-.PHONY: all test example run fuzz clean
+.PHONY: all test example run fuzz repeaters clean
 
 all: $(LIB)
 
@@ -70,6 +70,12 @@ $(BUILD)/fuzz: tests/fuzz/fuzz_frame.c $(SIM_OBJ) $(LIB) | $(BUILD)
 
 fuzz: $(BUILD)/fuzz
 	$(BUILD)/fuzz 200000
+
+$(BUILD)/treenet_repeaters: tests/sim/test_repeaters.c $(SIM_OBJ) $(LIB) | $(BUILD)
+	$(CC) $(CFLAGS) $(CPPFLAGS) tests/sim/test_repeaters.c $(SIM_OBJ) $(LIB) -o $@ $(LDLIBS)
+
+repeaters: $(BUILD)/treenet_repeaters
+	$(BUILD)/treenet_repeaters
 
 clean:
 	$(RMDIR) $(BUILD)
