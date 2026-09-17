@@ -115,12 +115,15 @@ Details in [architecture.md](architecture.md) and [protocol.md](protocol.md).
     ageing, reassembly, DAO refresh, PROBE) are expressed as computed deadlines;
     at the end of `treenet_poll()` the port receives the nearest deadline via
     `port.timer_arm()` so the MCU can sleep.
+12. **Leaf role** — an end device that sends/receives its own traffic but never
+    forwards other traffic, never rebroadcasts floods and is never chosen as a
+    parent (`TN_BEACON_ROUTER` flag).
 
 ---
 
 ## 6. Verification (current)
 
-- **1871 checks**, 0 failures (`make test`, `ctest`).
+- **1886 checks**, 0 failures (`make test`, `ctest`).
 - Scenarios: network formation, rank ordering, unicast down/up, broadcast,
   seamless reconfiguration on relay failure, beacon interval reset on
   re-parenting, tolerance to bit errors, neighbour metrics.

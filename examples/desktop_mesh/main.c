@@ -3,6 +3,13 @@
  * @brief Desktop example: build a small treenity mesh in the simulator and
  *        watch it converge, then exchange unicast and broadcast traffic.
  *
+ * It also shows two features:
+ *   - the LEAF role (an end device that never routes);
+ *   - tickless scheduling: the port's timer_arm() callback, which the
+ *     simulator records in sim_node_t::last_timer_arm. On real hardware you
+ *     implement timer_arm yourself and sleep the MCU until it fires (see the
+ *     porting guide under Doc/).
+ *
  * Build (from the treenity directory):
  *   cmake -S . -B build && cmake --build build
  *   ./build/treenet_example
@@ -12,6 +19,16 @@
 
 #include "sim.h"
 #include "treenet/treenet.h"
+
+static const char *role_name(treenet_role_t r)
+{
+    switch (r) {
+    case TREENET_ROLE_MASTER:   return "master";
+    case TREENET_ROLE_REPEATER: return "repeater";
+    case TREENET_ROLE_LEAF:     return "leaf";
+    default:                    return "node";
+    }
+}
 
 /* Observation hooks: the simulator calls these whenever a node receives a
  * datagram or reports a network event. */
@@ -45,13 +62,14 @@ int main(void)
     sim_set_range(s, 250.0);
     sim_set_callbacks(s, on_recv, on_event);
 
-    /* A Master plus five nodes spread over ~1 km, forcing several hops. */
+    /* A Master, five routers over ~1 km, and a leaf sensor at the edge. */
     sim_add_node(s, 1, TREENET_ROLE_MASTER, 0.0, 0.0, true);
     sim_add_node(s, 2, TREENET_ROLE_NODE, 200.0, 0.0, true);
     sim_add_node(s, 3, TREENET_ROLE_NODE, 400.0, 0.0, true);
     sim_add_node(s, 4, TREENET_ROLE_NODE, 600.0, 0.0, true);
     sim_add_node(s, 5, TREENET_ROLE_NODE, 800.0, 0.0, true);
     sim_add_node(s, 6, TREENET_ROLE_NODE, 1000.0, 0.0, true);
+    sim_add_node(s, 7, TREENET_ROLE_LEAF, 1200.0, 0.0, true);
 
     /* Let the mesh form. */
     printf("forming the mesh...\n");
@@ -60,12 +78,15 @@ int main(void)
     printf("\ntopology after convergence:\n");
     for (size_t i = 0; i < sim_node_count(s); i++) {
         sim_node_t *n = sim_node_at(s, i);
-        printf("  node %u: rank=%-5u parent=%-3u connected=%s\n", n->addr,
-               treenet_rank(n->net), treenet_parent(n->net),
-               treenet_is_connected(n->net) ? "yes" : "no");
+        printf("  node %u: role=%-8s rank=%-5u parent=%-3u connected=%s "
+               "wake=%ums\n",
+               n->addr, role_name(treenet_role(n->net)), treenet_rank(n->net),
+               treenet_parent(n->net),
+               treenet_is_connected(n->net) ? "yes" : "no",
+               n->last_timer_arm);
     }
 
-    /* Master -> far leaf (downward route). */
+    /* Master -> far router (downward route). */
     printf("\nmaster sends a unicast to node 6:\n");
     const char *msg = "hello from the master";
     if (treenet_send(sim_find(s, 1)->net, 6, msg, strlen(msg)) == 0) {
@@ -74,16 +95,26 @@ int main(void)
         printf("  no route\n");
     }
 
-    /* Leaf -> master (upward along the parent chain). */
-    printf("\nnode 6 sends a unicast to the master:\n");
-    const char *reply = "ack from node 6";
-    if (treenet_send(sim_find(s, 6)->net, 1, reply, strlen(reply)) == 0) {
+    /* The leaf is a source too: it sends its own data upward. */
+    printf("\nleaf (node 7) sends a reading to the master:\n");
+    const char *reading = "temp=21.5";
+    if (treenet_send(sim_find(s, 7)->net, 1, reading, strlen(reading)) == 0) {
         sim_run(s, 5000);
     } else {
         printf("  no route\n");
     }
 
-    /* Mesh-wide broadcast via managed flooding. */
+    /* And a destination: the Master can address the leaf directly. */
+    printf("\nmaster sends a unicast to the leaf (node 7):\n");
+    const char *cmd = "set-interval=60";
+    if (treenet_send(sim_find(s, 1)->net, 7, cmd, strlen(cmd)) == 0) {
+        sim_run(s, 5000);
+    } else {
+        printf("  no route\n");
+    }
+
+    /* Mesh-wide broadcast via managed flooding; the leaf receives it but does
+     * not rebroadcast it. */
     printf("\nnode 3 broadcasts to everyone:\n");
     const char *bc = "broadcast!";
     (void)treenet_broadcast(sim_find(s, 3)->net, bc, strlen(bc));

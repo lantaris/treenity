@@ -341,6 +341,11 @@ static void tn_handle_data(treenet_t *t, const tn_frame_t *f, int16_t rssi,
         return;
     }
 
+    /* Leaves are not routers: never forward other nodes' traffic. */
+    if (t->role == TREENET_ROLE_LEAF) {
+        return;
+    }
+
     /* Forwarding: suppress duplicates but always re-ACK the link. */
     if (tn_dupcache_seen(&t->dup, f->src, f->seq, now)) {
         if (want_ack) tn_send_ack(t, f->prev, f->seq);
@@ -382,6 +387,11 @@ static void tn_handle_flood(treenet_t *t, const tn_frame_t *f, int16_t rssi,
     }
 
     tn_deliver(t, f, rssi, snr);
+
+    /* Leaves deliver broadcasts but never rebroadcast them. */
+    if (t->role == TREENET_ROLE_LEAF) {
+        return;
+    }
 
     if (f->hop_limit <= 1) {
         return;

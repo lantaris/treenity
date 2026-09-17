@@ -111,6 +111,12 @@ typedef struct {
 /** Beacon flag: the sender currently has a usable parent. */
 #define TN_BEACON_HAS_PARENT 0x01u
 
+/**
+ * Beacon flag: the sender is a router and may be selected as a parent.
+ * Leaves never set it, so other nodes will not route through them.
+ */
+#define TN_BEACON_ROUTER 0x02u
+
 /* ------------------------------------------------------------------------- */
 /* Fragment header                                                            */
 /* ------------------------------------------------------------------------- */

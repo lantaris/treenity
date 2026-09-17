@@ -38,7 +38,10 @@ void tn_beacon_send(treenet_t *t, uint32_t now)
     tn_beacon_payload_t b;
     b.rank = t->rank;
     b.parent = t->parent;
-    b.flags = t->connected ? TN_BEACON_HAS_PARENT : 0u;
+    b.flags = 0u;
+    if (t->connected) b.flags |= TN_BEACON_HAS_PARENT;
+    /* Leaves are not routers and must never be chosen as a parent. */
+    if (t->role != TREENET_ROLE_LEAF) b.flags |= TN_BEACON_ROUTER;
     /* Advertise the current Trickle interval (in 100 ms units) so receivers
      * can compute an accurate delivery ratio. */
     uint32_t interval_100 = t->trickle_I / 100u;

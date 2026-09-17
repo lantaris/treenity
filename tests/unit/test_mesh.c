@@ -261,6 +261,92 @@ static void test_timer_arm_tx(void)
     sim_destroy(s);
 }
 
+static void test_leaf_joins_and_traffic(void)
+{
+    sim_t *s = sim_create(11u, SIM_TX_POWER, SIM_SENSITIVITY, SIM_NOISE);
+    sim_set_path_loss(s, SIM_REF_LOSS, SIM_EXPONENT);
+    sim_set_range(s, SIM_RANGE);
+    sim_add_node(s, 1, TREENET_ROLE_MASTER, 0.0, 0.0, true);
+    sim_add_node(s, 2, TREENET_ROLE_LEAF, 100.0, 0.0, true);
+    sim_run(s, 60000);
+
+    sim_node_t *master = sim_find(s, 1);
+    sim_node_t *leaf = sim_find(s, 2);
+    CHECK_EQ(treenet_role(leaf->net), TREENET_ROLE_LEAF);
+    CHECK(treenet_is_connected(leaf->net));
+    CHECK_EQ(treenet_parent(leaf->net), 1u);
+
+    /* Leaf -> Master (uplink). */
+    uint8_t up[3] = { 1, 2, 3 };
+    CHECK_EQ(treenet_send(leaf->net, 1, up, sizeof(up)), 0);
+    sim_run(s, 5000);
+    CHECK(master->datagrams_rx > 0);
+
+    /* Master -> leaf (downward route built by the leaf's DAO). */
+    uint32_t before = leaf->datagrams_rx;
+    uint8_t down[2] = { 9, 9 };
+    CHECK_EQ(treenet_send(master->net, 2, down, sizeof(down)), 0);
+    sim_run(s, 5000);
+    CHECK(leaf->datagrams_rx > before);
+
+    sim_destroy(s);
+}
+
+static void test_leaf_not_a_parent(void)
+{
+    /* The node is closer to the leaf than to the Master, but a leaf must never
+     * be chosen as a parent. */
+    sim_t *s = sim_create(13u, SIM_TX_POWER, SIM_SENSITIVITY, SIM_NOISE);
+    sim_set_path_loss(s, SIM_REF_LOSS, SIM_EXPONENT);
+    sim_set_range(s, SIM_RANGE);
+    sim_add_node(s, 1, TREENET_ROLE_MASTER, 0.0, 0.0, false);
+    sim_add_node(s, 2, TREENET_ROLE_NODE, 100.0, 0.0, false);
+    sim_add_node(s, 3, TREENET_ROLE_LEAF, 50.0, 0.0, false);
+    sim_run(s, 90000);
+
+    sim_node_t *node = sim_find(s, 2);
+    sim_node_t *leaf = sim_find(s, 3);
+
+    CHECK(treenet_is_connected(node->net));
+    CHECK_EQ(treenet_parent(node->net), 1u); /* Master, not the leaf */
+    CHECK(treenet_is_connected(leaf->net));
+    treenet_addr_t lp = treenet_parent(leaf->net);
+    CHECK(lp == 1u || lp == 2u); /* the leaf uses a router */
+
+    sim_destroy(s);
+}
+
+static void test_leaf_does_not_rebroadcast(void)
+{
+    sim_t *s = sim_create(17u, SIM_TX_POWER, SIM_SENSITIVITY, SIM_NOISE);
+    sim_set_path_loss(s, SIM_REF_LOSS, SIM_EXPONENT);
+    sim_set_range(s, SIM_RANGE);
+    sim_add_node(s, 1, TREENET_ROLE_MASTER, 0.0, 0.0, false);
+    sim_add_node(s, 2, TREENET_ROLE_LEAF, 200.0, 0.0, false);
+    sim_add_node(s, 3, TREENET_ROLE_NODE, 400.0, 0.0, false); /* beyond the leaf */
+    sim_run(s, 90000);
+
+    sim_node_t *master = sim_find(s, 1);
+    sim_node_t *leaf = sim_find(s, 2);
+    sim_node_t *far = sim_find(s, 3);
+
+    CHECK(treenet_is_connected(leaf->net));
+    /* The far node can only hear the leaf, which is not a router. */
+    CHECK(!treenet_is_connected(far->net));
+
+    /* A Master broadcast reaches the leaf but is not rebroadcast by it, so the
+     * far node never sees it. */
+    uint32_t leaf_before = leaf->datagrams_rx;
+    uint8_t msg = 0x5A;
+    (void)treenet_broadcast(master->net, &msg, 1);
+    sim_run(s, 10000);
+
+    CHECK(leaf->datagrams_rx > leaf_before);
+    CHECK_EQ(far->datagrams_rx, 0u);
+
+    sim_destroy(s);
+}
+
 static void test_bit_errors_tolerated(void)
 {
     /* A noisy channel: the CRC rejects corrupted frames, so the mesh sees
@@ -322,6 +408,9 @@ void run_mesh_tests(void)
     RUN_TEST(test_timer_arm_idle);
     RUN_TEST(test_timer_arm_disconnected);
     RUN_TEST(test_timer_arm_tx);
+    RUN_TEST(test_leaf_joins_and_traffic);
+    RUN_TEST(test_leaf_not_a_parent);
+    RUN_TEST(test_leaf_does_not_rebroadcast);
     RUN_TEST(test_bit_errors_tolerated);
     RUN_TEST(test_neighbor_metrics);
 }

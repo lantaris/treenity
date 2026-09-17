@@ -121,6 +121,9 @@ for (size_t i = 0; i < n; i++) {
 - The rest are `TREENET_ROLE_NODE`.
 - `TREENET_ROLE_REPEATER` is useful for fixed relays: it has priority during
   flooding.
+- `TREENET_ROLE_LEAF` is for sensors / end devices: they send and receive their
+  own data but never forward other traffic, never rebroadcast floods and are
+  never chosen as parents (they may sleep their radio).
 
 ## 7. Tuning for scale
 

@@ -67,6 +67,8 @@ On the simulator:
 - **tickless scheduling** (`timer_arm`): idle deadline exceeds 5 s (no fixed
   tick), a queued transmission is accounted for, and a node without a parent is
   bounded by the PROBE interval;
+- **leaf role**: joins and exchanges data both ways, is never chosen as a parent
+  by other nodes, and does not rebroadcast floods;
 - neighbour metrics (RSSI/SNR/cost/parent).
 
 ### Corruption tests (`tests/unit/test_corrupt.c`)

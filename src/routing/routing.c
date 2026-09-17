@@ -136,8 +136,8 @@ uint32_t tn_route_expire(tn_route_table_t *t, uint32_t now, uint32_t timeout_ms)
 uint16_t tn_routing_candidate_rank(const tn_neighbor_t *n)
 {
     if (n == NULL) return TREENET_RANK_INFINITE;
-    /* A neighbour only offers a path if it advertises one. */
-    if ((n->flags & TN_BEACON_HAS_PARENT) == 0) return TREENET_RANK_INFINITE;
+    /* Only routers may be used as a parent; leaves never advertise this. */
+    if ((n->flags & TN_BEACON_ROUTER) == 0) return TREENET_RANK_INFINITE;
     if (n->rank >= TREENET_RANK_INFINITE) return TREENET_RANK_INFINITE;
 
     /* Rank increase: the link cost plus a small fixed step. The step keeps the
@@ -364,6 +364,11 @@ void tn_dao_send(treenet_t *t, uint32_t now)
 
 void tn_dao_handle(treenet_t *t, const tn_frame_t *f, uint32_t now)
 {
+    /* Leaves are not routers: they never hold or forward downward routes. */
+    if (t->role == TREENET_ROLE_LEAF) {
+        return;
+    }
+
     tn_dao_payload_t d;
     if (!tn_dao_decode(f->payload, f->payload_len, &d)) {
         return;

@@ -84,7 +84,7 @@ of the current transmitter (`tn_tx_submit`). This allows:
 |---|---|---|
 | 0 | 2 | sender `rank` |
 | 2 | 4 | sender `parent` (or `0xFFFFFFFF`) |
-| 6 | 1 | `flags` (bit 0 `TN_BEACON_HAS_PARENT` — offers a path to the Master) |
+| 6 | 1 | `flags` (bit 0 `TN_BEACON_HAS_PARENT` — connected; bit 1 `TN_BEACON_ROUTER` — may be a parent) |
 | 7 | 2 | `interval_100ms` — current beacon interval in 100 ms units |
 
 The interval is advertised so a neighbour can compute the expected number of
@@ -207,7 +207,7 @@ For each neighbour:
 
 A candidate is a neighbour that:
 - is "fresh" (a beacon was heard within `TREENET_PARENT_TIMEOUT_MS`);
-- advertises `TN_BEACON_HAS_PARENT` (it has a path to the Master);
+- advertises `TN_BEACON_ROUTER` (it is a router; leaves never set this);
 - yields a finite `candidate_rank = n.rank + RANK_STEP + n.link_cost`.
 
 The candidate with the lowest `candidate_rank` is chosen. If there are no
@@ -269,6 +269,9 @@ beacon.
   With `WANT_ACK` an ACK is also sent on intermediate nodes (per-hop
   acknowledgement).
 
+> Leaves (`LEAF`) never forward other nodes' unicast: a frame not addressed to
+> them is dropped.
+
 ### 6.3 Managed flooding (broadcast)
 
 `FLOOD` with `dst = broadcast`:
@@ -278,6 +281,7 @@ beacon.
   weak link (low SNR) rebroadcasts sooner**, a strong link later. This spreads
   the message outwards before the dense core echoes it.
 - The `REPEATER` role rebroadcasts with zero delay.
+- Leaves (`LEAF`) deliver broadcasts to themselves but **never rebroadcast** them.
 
 ## 7. Events and statistics
 

@@ -46,6 +46,9 @@ every received packet.
   composite link cost; the values are exposed to the application.
 - **Smart parent selection.** An objective function plus hysteresis and
   dwell-time eliminate flapping and enable fast reconfiguration.
+- **Participant roles.** `MASTER` (root), `NODE`/`REPEATER` (routers) and `LEAF`
+  (end device: sends and receives its own data but never forwards other traffic
+  and is never chosen as a parent).
 - **Managed flooding** for broadcasts with SNR-based priority.
 - **Reliability.** Hop-by-hop ACK and retransmissions; reliable route
   advertisement (DAO).
@@ -203,7 +206,7 @@ treenity/
 ## Testing
 
 ```sh
-make test          # unit + scenario tests (1871 checks)
+make test          # unit + scenario tests (1886 checks)
 make fuzz          # fuzzing, 200000 iterations
 ```
 
@@ -249,6 +252,7 @@ Full index: [Doc/eng/README.md](Doc/eng/README.md) (English) and
 
 - [x] Core: MAC, Link, Routing, API
 - [x] Network simulator and tests
+- [x] Tickless scheduling and the `LEAF` role
 - [ ] Reference hardware port (SX1262 + ESP32/STM32) and field trials
 - [ ] Non-storing mode for networks above 500 nodes
 - [ ] Security (AES-CCM/ChaCha, key management)

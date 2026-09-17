@@ -94,6 +94,7 @@ and never use dynamic memory.
 | `TREENET_ROLE_MASTER` | Root of the DODAG. Rank = 0, no parent, always `connected`. |
 | `TREENET_ROLE_NODE` | Ordinary node. Has a parent and a route to the Master. |
 | `TREENET_ROLE_REPEATER` | Infrastructure repeater: like a NODE, but rebroadcasts floods with the highest priority (zero delay). |
+| `TREENET_ROLE_LEAF` | End device / sensor. Sends and receives its **own** traffic but is **not a router**: it never forwards other nodes' frames, never rebroadcasts floods and is never chosen as a parent. |
 
 ## 7. Addressing
 

@@ -47,7 +47,14 @@ typedef enum {
      * Infrastructure repeater. Like a NODE but rebroadcasts with higher
      * priority, mirroring the ROUTER/REPEATER roles known from other meshes.
      */
-    TREENET_ROLE_REPEATER = 2
+    TREENET_ROLE_REPEATER = 2,
+    /**
+     * End device / sensor. It sends and receives its own traffic but is not a
+     * router: it never forwards other nodes' frames, never rebroadcasts floods
+     * and is never chosen as a parent by other nodes. Leaves therefore sit at
+     * the edge of the mesh and may sleep their radio.
+     */
+    TREENET_ROLE_LEAF = 3
 } treenet_role_t;
 
 /* ------------------------------------------------------------------------- */

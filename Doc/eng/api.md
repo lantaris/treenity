@@ -185,7 +185,13 @@ void (*on_event)(treenet_t *t, treenet_event_t ev, void *arg);
 ## 6. Types, events, statistics
 
 ### Roles (`treenet_role_t`)
-`TREENET_ROLE_NODE` (0), `TREENET_ROLE_MASTER` (1), `TREENET_ROLE_REPEATER` (2).
+`TREENET_ROLE_NODE` (0), `TREENET_ROLE_MASTER` (1), `TREENET_ROLE_REPEATER` (2),
+`TREENET_ROLE_LEAF` (3).
+
+`NODE`, `MASTER` and `REPEATER` are routers (they forward traffic and can be
+parents). `LEAF` is an end device: it sends/receives its own data but never
+forwards other nodes' traffic, never rebroadcasts floods and is never chosen as
+a parent.
 
 ### Events (`treenet_event_t`)
 

@@ -186,7 +186,12 @@ void (*on_event)(treenet_t *t, treenet_event_t ev, void *arg);
 ## 6. Типы, события, статистика
 
 ### Роли (`treenet_role_t`)
-`TREENET_ROLE_NODE` (0), `TREENET_ROLE_MASTER` (1), `TREENET_ROLE_REPEATER` (2).
+`TREENET_ROLE_NODE` (0), `TREENET_ROLE_MASTER` (1), `TREENET_ROLE_REPEATER` (2),
+`TREENET_ROLE_LEAF` (3).
+
+`NODE`, `MASTER` и `REPEATER` — роутеры (пересылают трафик и могут быть
+родителями). `LEAF` — конечное устройство: отправляет/принимает свои данные, но
+не пересылает чужой трафик, не ретранслирует flooding и не может быть родителем.
 
 ### События (`treenet_event_t`)
 
